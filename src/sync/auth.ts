@@ -19,14 +19,15 @@ export const saveSession = (s: Session | null) => {
   try { if (s) localStorage.setItem(STORE, JSON.stringify(s)); else localStorage.removeItem(STORE); } catch { /* ignore */ }
 };
 
-const friendly = (m: string, fatal: boolean) =>
+export const friendly = (m: string, fatal: boolean, link = false) =>
   /rate limit|too many/i.test(m) ? "Too many emails right now. Please try again in a little while." :
   /for security purposes|after \d+ seconds/i.test(m) ? "Please wait a few seconds before asking for another code." :
-  /invalid.*email|unable to validate email|email.*invalid/i.test(m) ? "Enter a valid email address." :
-  /expired|invalid|otp|token/i.test(m) ? (fatal ? "Your sign-in expired. Please sign in again." : "That code didn’t work. Check it, or ask for a new one.") :
+  // Check expiry first: "Email link is invalid or has expired" also contains the word "email".
+  /expired|link is invalid|otp|token/i.test(m) ? (fatal ? "Your sign-in expired. Please sign in again." : link ? "That link has already been used or has expired. Ask for a new one." : "That code didn’t work. Check it, or ask for a new one.") :
+  /unable to validate email|invalid format|valid email/i.test(m) ? "Enter a valid email address." :
   "Something went wrong. Please try again.";
 
-async function call<T>(path: string, body: unknown, accessToken?: string): Promise<T> {
+async function call<T>(path: string, body: unknown, accessToken?: string, link = false): Promise<T> {
   if (!accountsEnabled) throw new AuthError("Accounts aren’t set up yet.");
   let res: Response;
   try {
@@ -34,7 +35,7 @@ async function call<T>(path: string, body: unknown, accessToken?: string): Promi
   } catch { throw new AuthError("Can’t reach the sign-in service. Check your connection."); }
   const text = await res.text();
   const json = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new AuthError(friendly(json?.msg || json?.error_description || json?.message || res.statusText, path.includes("token?grant_type=refresh")), res.status === 400 || res.status === 401);
+  if (!res.ok) throw new AuthError(friendly(json?.msg || json?.error_description || json?.message || res.statusText, path.includes("token?grant_type=refresh"), link), res.status === 400 || res.status === 401);
   return json as T;
 }
 
@@ -48,6 +49,17 @@ const toSession = (r: TokenResponse): Session => ({
 /** Email a sign-in link or code (depending on the email template). Creates the account the first time. */
 export const sendCode = (email: string) => call(`/auth/v1/otp?redirect_to=${encodeURIComponent(location.origin + location.pathname)}`, { email: email.trim(), create_user: true });
 export const verifyCode = async (email: string, code: string) => toSession(await call<TokenResponse>("/auth/v1/verify", { type: "email", email: email.trim(), token: code.replace(/\s+/g, "") }));
+/**
+ * Sign in by pasting the link from the email. This is for the installed home-screen app: tapping the link opens
+ * Safari (a different browser with its own storage), but copying the link and pasting it here signs in right here.
+ */
+export async function verifyLink(pasted: string): Promise<Session> {
+  let hash = "", type = "";
+  try { const u = new URL(pasted.trim()); hash = u.searchParams.get("token_hash") || u.searchParams.get("token") || ""; type = u.searchParams.get("type") || ""; } catch { /* not a link */ }
+  if (!hash) throw new AuthError("That doesn’t look like the sign-in link. Copy the whole link from the email.");
+  const t = ["magiclink", "signup", "email", "invite", "recovery"].includes(type) ? type : "magiclink";
+  return toSession(await call<TokenResponse>("/auth/v1/verify", { type: t, token_hash: hash }, undefined, true));
+}
 export const signOutRemote = (s: Session) => call("/auth/v1/logout", {}, s.access_token).catch(() => undefined);
 
 const NOTICE = "plenty:auth:notice";

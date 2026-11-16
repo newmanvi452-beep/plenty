@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dish, LIB } from "./domain/data";
 import { daysUntil, fmtDate, hourLabel, parseISO } from "./domain/format";
 import { dateOfKey, eventKey, isEventOver, latestFor, reviewFor, upsertReview, VERDICTS, Verdict } from "./domain/review";
@@ -76,8 +76,8 @@ export default function App() {
         {s.tab === "notes" && <Notes s={s} d={d} patch={patch} goHome={() => go("home")} />}
       </main>
       <nav className="tabs" aria-label="Sections">
-        {([["home", "Home", "⌂"], ["menu", "Menu", "☰"], ["shop", "Groceries", "🛒"], ["plan", "Plan", "✓"], ["notes", "Notes", "✎"]] as const).map(([k, l, i]) => (
-          <button key={k} aria-pressed={s.tab === k} onClick={() => go(k)}><span aria-hidden="true" style={{ fontSize: 20 }}>{i}</span>{l}</button>
+        {([["home", "Home"], ["menu", "Menu"], ["shop", "Groceries"], ["plan", "Plan"], ["notes", "Notes"]] as const).map(([k, l]) => (
+          <button key={k} aria-pressed={s.tab === k} onClick={() => go(k)}><TabIcon name={k} />{l}</button>
         ))}
       </nav>
       {detail && <DetailSheet id={detail} s={s} d={d} patch={patch} close={() => setDetail(null)} />}
@@ -182,9 +182,9 @@ function Menu({ s, d, patch, share, open, openForm }: { s: AppState; d: Derived;
   const [undo, setUndo] = useState<{ text: string; run: () => void } | null>(null);
   useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(null), 7000); return () => clearTimeout(t); }, [undo]);
   /** Delete a dish from the list. Your own recipes are deleted for good (after a confirm); built-ins are hidden and can be restored. */
-  const removeFromList = (x: Dish) => {
+  const removeFromList = (x: Dish): boolean | void => {
     if (x.custom) {
-      if (!window.confirm(`Delete “${x.name}”? This removes the recipe and its notes for good.`)) return;
+      if (!window.confirm(`Delete “${x.name}”? This removes the recipe and its notes for good.`)) return false;
       patch((st) => ({ ...forgetDish(st, x.id), custom: st.custom.filter((c) => c.id !== x.id), reviews: st.reviews.filter((r) => r.dishId !== x.id) }));
       return;
     }
@@ -203,20 +203,21 @@ function Menu({ s, d, patch, share, open, openForm }: { s: AppState; d: Derived;
   return (<>
     <button className="btn dashed" onClick={openForm}>+ Add your own recipe</button>
     <Overview s={s} d={d} />
+    <p className="sub" style={{ margin: "-6px 4px 0" }}>Tip: swipe a dish left to remove it.</p>
     {d.cats.map((c) => { const r = d.rec(c.key), t = toneOf(r, d.counts[c.key] || 0); return (
       <section key={c.key} aria-label={c.label}>
         <div className="catHead"><div><h2 style={{ fontSize: 20 }}>{c.label}</h2><p className="sub">{r ? `Pick ${r}${c.hint ? " · " + c.hint : ""}` : c.hint || "Optional for this kind of party"}</p></div><span className={"tag " + t.c}>{t.t}</span></div>
         <div className="stack" style={{ gap: 10 }}>{d.all.filter((x) => x.cat === c.key).map((x) => { const on = !!s[key][x.id], who = d.bringerOf(x); return (
-          <div key={x.id} className={"dish" + (on ? " on" : "")}>
+          <SwipeRow key={x.id} label={x.custom ? "Delete" : "Remove"} onRemove={() => removeFromList(x)}>
+          <div className={"dish" + (on ? " on" : "")}>
             <button className="pick" aria-pressed={on} onClick={() => toggle(x.id)}>
               <span className="check">{on && <Check />}</span>
               <span className="stack" style={{ gap: 4 }}><b style={{ fontSize: 16 }}>{x.name}</b><span className="sub" style={{ margin: 0 }}>{x.meta}</span>
                 {on && <span className="badge">{d.scale(x).badge}</span>}{on && who && <span className="tag ok">{who} is bringing it</span>}
                 {(() => { const lv = latestFor(s.reviews, x.id, evKey); const v = VERDICTS.find((q) => q.key === lv?.verdict); return v ? <span className="tag">{v.emoji} {v.label} last time</span> : null; })()}</span>
             </button>
-            <button className="del" aria-label={`Remove ${x.name} from my list`} onClick={() => removeFromList(x)}>🗑</button>
             <button className="info" aria-label={`Details for ${x.name}`} onClick={() => open(x.id)}>›</button>
-          </div>); })}</div>
+          </div></SwipeRow>); })}</div>
       </section>); })}
     {undo && <div className="toast" role="status"><span>{undo.text}</span><button onClick={() => { undo.run(); setUndo(null); }}>Undo</button></div>}
     <Extras s={s} d={d} patch={patch} share={share} />
@@ -331,6 +332,54 @@ function AccountRow({ s, account, open }: { s: AppState; account: AccountApi; op
     <div className="row" style={{ padding: "0 4px", flex: "none" }}>
       <span className="sub" style={{ margin: 0, fontWeight: 800 }}>{text}</span>
       <button className="chip" style={{ minHeight: 36 }} onClick={open}>{account.session ? "Profile" : account.enabled ? "Sign in" : "Profile"}</button></div>);
+}
+
+/** Slide a row left to reveal Remove; slide far (or tap Remove) to delete it. A plain tap still works as a tap. */
+function SwipeRow({ onRemove, label, children }: { onRemove: () => boolean | void; label: string; children: React.ReactNode }) {
+  const [dx, setDx] = useState(0), [anim, setAnim] = useState(false);
+  const start = useRef<{ x: number; y: number; base: number } | null>(null), dragging = useRef(false), moved = useRef(false);
+  const REVEAL = 104, FAR = 150;
+  const fire = () => { setAnim(true); setDx(-520); setTimeout(() => { if (onRemove() === false) { setAnim(true); setDx(0); } }, 170); };
+  const down = (e: React.PointerEvent) => { start.current = { x: e.clientX, y: e.clientY, base: dx }; dragging.current = false; moved.current = false; setAnim(false); };
+  const move = (e: React.PointerEvent) => {
+    const st = start.current; if (!st) return;
+    const ddx = e.clientX - st.x, ddy = e.clientY - st.y;
+    if (!dragging.current) {
+      if (Math.abs(ddx) > 8 && Math.abs(ddx) > Math.abs(ddy) * 1.5) { dragging.current = true; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }
+      else { if (Math.abs(ddy) > 10) start.current = null; return; }
+    }
+    moved.current = true;
+    setDx(Math.min(0, Math.max(-280, st.base + ddx)));
+  };
+  const up = () => {
+    start.current = null;
+    if (!dragging.current) return;
+    dragging.current = false; setAnim(true);
+    if (dx < -FAR) fire(); else if (dx < -48) setDx(-REVEAL); else setDx(0);
+  };
+  // A drag shouldn't count as a tap; and tapping a revealed row just closes it.
+  const tap = (e: React.MouseEvent) => {
+    if (moved.current) { moved.current = false; e.preventDefault(); e.stopPropagation(); }
+    else if (dx !== 0) { setAnim(true); setDx(0); e.preventDefault(); e.stopPropagation(); }
+  };
+  return (
+    <div className="swipe">
+      <button className="swipe-act" style={{ visibility: dx < 0 ? "visible" : "hidden" }} tabIndex={dx < 0 ? 0 : -1} aria-label={label} onClick={fire}>{label}</button>
+      <div className="swipe-body" style={{ transform: `translateX(${dx}px)`, transition: anim ? "transform .18s ease" : "none" }}
+        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onClickCapture={tap}>{children}</div>
+    </div>);
+}
+
+/** Simple line icons for the bottom bar. */
+function TabIcon({ name }: { name: Tab }) {
+  const p = { width: 24, height: 24, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
+  switch (name) {
+    case "home": return <svg {...p}><path d="M3.5 11 12 4l8.5 7" /><path d="M5.5 9.5V20h13V9.5" /><path d="M10 20v-5.5h4V20" /></svg>;
+    case "menu": return <svg {...p}><path d="M7 3v6a2.5 2.5 0 0 0 5 0V3" /><path d="M9.5 3v18" /><path d="M17 21V3c-2.6 1.4-3.5 4.2-3.5 8v3H17" /></svg>;
+    case "shop": return <svg {...p}><path d="M5 8h14l-1.2 12.2H6.2L5 8Z" /><path d="M9 8V6.5a3 3 0 0 1 6 0V8" /></svg>;
+    case "plan": return <svg {...p}><rect x="5" y="4.5" width="14" height="16.5" rx="2" /><path d="M9 4.5V3.5h6v1" /><path d="m9 13.5 2 2 4-4.2" /></svg>;
+    case "notes": return <svg {...p}><path d="M4 20l1-4.2L16.3 4.5a2.1 2.1 0 0 1 3 3L8 18.8 4 20Z" /><path d="m14.5 6.5 3 3" /></svg>;
+  }
 }
 
 /** Everything at a glance: what you're making, and what each person is bringing. */

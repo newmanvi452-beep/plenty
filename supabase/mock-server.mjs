@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 
 const CODE = "123456";
+const linkTokens = new Map(); // token_hash -> email; each works once, like the real sign-in links
 const db = new PGlite();
 await db.exec("create role anon nologin; create role authenticated nologin; grant usage on schema public to anon, authenticated;");
 // Minimal stand-in for Supabase's auth schema: auth.uid() reads the signed-in user, like PostgREST does.
@@ -56,11 +57,22 @@ createServer(async (req, res) => {
       const uid = uuidFor(body.email);
       await db.query("insert into auth.users (id, email) values ($1, $2) on conflict do nothing", [uid, body.email]);
       const t = tokens(uid, body.email), back = new URL(url, "http://x").searchParams.get("redirect_to") || "http://localhost:5175/";
+      const hash = createHash("sha256").update(body.email + Math.random()).digest("hex");
+      linkTokens.set(hash, body.email);
+      console.log(`[mock] email link (what the real email contains): http://localhost:54321/auth/v1/verify?token=${hash}&type=magiclink&redirect_to=${encodeURIComponent(back)}`);
       console.log(`[mock] sign-in code for ${body.email}: ${CODE}`);
       console.log(`[mock] sign-in link: ${back}#access_token=${t.access_token}&expires_at=${t.expires_at}&expires_in=3600&refresh_token=${t.refresh_token}&token_type=bearer&type=magiclink`);
       return send(res, 200, {});
     }
     if (url === "/auth/v1/verify") {
+      if (body.token_hash) {
+        const email = linkTokens.get(body.token_hash);
+        if (!email) return send(res, 400, { code: 403, error_code: "otp_expired", msg: "Email link is invalid or has expired" });
+        linkTokens.delete(body.token_hash);
+        const uid = uuidFor(email);
+        await db.query("insert into auth.users (id, email) values ($1, $2) on conflict do nothing", [uid, email]);
+        return send(res, 200, tokens(uid, email));
+      }
       if (String(body.token) !== CODE) return send(res, 400, { code: 400, error_code: "otp_expired", msg: "Token has expired or is invalid" });
       const uid = uuidFor(body.email);
       await db.query("insert into auth.users (id, email) values ($1, $2) on conflict do nothing", [uid, body.email]);

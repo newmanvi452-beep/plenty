@@ -13,6 +13,8 @@ export default function ProfileSheet({ account, s, patch, close }: { account: Ac
   useEffect(() => { if (cool <= 0) return; const t = setTimeout(() => setCool(cool - 1), 1000); return () => clearTimeout(t); }, [cool]);
   const run = async (fn: () => Promise<void>) => { setBusy(true); setErr(""); try { await fn(); } catch (e) { setErr(e instanceof Error ? e.message : "Something went wrong."); } finally { setBusy(false); } };
   const send = () => run(async () => { await account.requestCode(email); setStep("code"); setCode(""); setCool(30); });
+  const [pasted, setPasted] = useState("");
+  const verifyPasted = () => run(async () => { await account.confirmLink(pasted); setStep("email"); setPasted(""); });
   const verify = () => run(async () => { await account.confirmCode(email, code); setStep("email"); setCode(""); });
   const signedIn = !!account.session;
 
@@ -36,6 +38,11 @@ export default function ProfileSheet({ account, s, patch, close }: { account: Ac
             <button className="btn" disabled={busy || !/.+@.+\..+/.test(email.trim())} onClick={send}>{busy ? "Sending…" : AUTH_METHOD === "code" ? "Email me a code" : "Email me a sign-in link"}</button></>
           ) : AUTH_METHOD === "link" ? (<>
             <p className="sub" style={{ margin: 0 }} role="status">We emailed a sign-in link to <b>{email.trim()}</b>. Open it on this device to finish signing in. It can take a minute, and may land in spam.</p>
+            <div className="field"><label htmlFor="acct-link">Using the home-screen app?</label>
+              <p className="sub" style={{ margin: 0, fontWeight: 600 }}>Tapping the link opens Safari instead. Press and hold the link in your email, choose Copy Link, and paste it here. (Don’t tap it first: a link only works once.)</p>
+              <input id="acct-link" inputMode="url" autoCapitalize="none" autoCorrect="off" placeholder="Paste the link here" value={pasted}
+                onChange={(e) => { setPasted(e.target.value); setErr(""); }} /></div>
+            <button className="btn ghost" disabled={busy || !pasted.trim()} onClick={verifyPasted}>{busy ? "Checking…" : "Sign in with this link"}</button>
             <div className="row" style={{ gap: 8 }}>
               <button className="chip" disabled={busy || cool > 0} onClick={send}>{cool > 0 ? `Resend in ${cool}s` : "Resend link"}</button>
               <button className="chip" onClick={() => { setStep("email"); setErr(""); }}>Use a different email</button></div></>

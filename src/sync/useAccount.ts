@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fromCloud, mergeStates, toCloud } from "../domain/merge";
 import { AppState, initialState } from "../store";
-import { accountsEnabled, AuthError, freshSession, loadSession, saveSession, sendCode, Session, signOutRemote, takeNotice, verifyCode } from "./auth";
+import { accountsEnabled, AuthError, freshSession, loadSession, saveSession, sendCode, Session, signOutRemote, takeNotice, verifyCode, verifyLink } from "./auth";
 import { CloudError, deleteCloud, pullCloud, pushCloud } from "./cloud";
 
 const META = "plenty:sync:v1"; // which account this device's data last synced with
@@ -75,6 +75,7 @@ export function useAccount(state: AppState, replace: (s: AppState) => void) {
 
   const requestCode = (email: string) => sendCode(email);
   const confirmCode = async (email: string, code: string) => { const s = await verifyCode(email, code); saveSession(s); setSession(s); };
+  const confirmLink = async (pasted: string) => { const s = await verifyLink(pasted); saveSession(s); setSession(s); };
   const clearDevice = () => { saveMeta(null); replace(initialState()); };
 
   /** Make sure the latest changes are saved, then sign out and clear this device. */
@@ -93,6 +94,6 @@ export function useAccount(state: AppState, replace: (s: AppState) => void) {
     await signOutRemote(cur); drop(); clearDevice();
   };
 
-  return { enabled: accountsEnabled, session, email: session?.user.email ?? "", status, error, lastSynced, requestCode, confirmCode, signOut, deleteData, syncNow };
+  return { enabled: accountsEnabled, session, email: session?.user.email ?? "", status, error, lastSynced, requestCode, confirmCode, confirmLink, signOut, deleteData, syncNow };
 }
 export type AccountApi = ReturnType<typeof useAccount>;

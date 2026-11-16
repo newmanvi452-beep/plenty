@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fromCloud, mergeStates, toCloud } from "./merge";
 import { initialState } from "../store";
 import { upsertReview } from "./review";
+import { friendly } from "../sync/auth";
 
 const st = (over: Record<string, unknown> = {}) => ({ ...initialState(), ...over }) as ReturnType<typeof initialState>;
 const dish = (id: string) => ({ id, name: id, short: id, cat: "sides", mode: "tg" as const, modes: ["tg" as const], custom: true, serves: 4, meta: "", blurb: "", ing: [], ahead: [], day: [] });
@@ -40,5 +41,14 @@ describe("syncing devices", () => {
     const restored = fromCloud({ adults: 5 } as never, st());
     expect(restored.adults).toBe(5);
     expect(restored.reviews).toEqual([]); // field an older copy never had
+  });
+});
+
+describe("sign-in messages", () => {
+  it("an expired or used link is not reported as a bad email address", () => {
+    expect(friendly("Email link is invalid or has expired", false, true)).toMatch(/already been used or has expired/);
+    expect(friendly("Token has expired or is invalid", false)).toMatch(/code didn’t work/);
+    expect(friendly("Unable to validate email address: invalid format", false)).toBe("Enter a valid email address.");
+    expect(friendly("email rate limit exceeded", false)).toMatch(/Too many emails/);
   });
 });
