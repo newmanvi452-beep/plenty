@@ -3,11 +3,13 @@ import { DEFAULT_PARTY, DEFAULT_TG, LIB } from "./data";
 import { derive, parseLine, PlannerState, recTG, roastMin, turkeyLbs } from "./planner";
 import { buildCustomDish, cleanOcr, numberSteps, parseRecipeText, stepList } from "./recipe";
 import { packaged } from "./packaging";
-import { clock, frac } from "./format";
+import { clock, daysUntil, frac, fmtDate, isoDate, nextThanksgiving, parseISO, thanksgivingOf } from "./format";
+import { eventKey, isEventOver, latestFor, reviewFor, upsertReview } from "./review";
 
 const ids = (a: string[]) => Object.fromEntries(a.map((i) => [i, true as const]));
 const base = (over: Partial<PlannerState> = {}): PlannerState => ({
   mode: "tg", adults: 12, kids: 0, leftovers: false, partyStyle: "meal", dinnerTG: 16 * 60, partyTime: 19 * 60,
+  tgDate: "2026-11-26", partyDate: "", hidden: {},
   selTG: ids(DEFAULT_TG), selP: ids(DEFAULT_PARTY), custom: [], bringers: {}, extras: [], ...over,
 });
 
@@ -213,5 +215,67 @@ Serve with crackers`, keys);
     expect(numberSteps("Slice\nBake")).toBe("1. Slice\n2. Bake");
     expect(numberSteps("1. Slice\n\n3) Bake\nStep 4: Eat")).toBe("1. Slice\n2. Bake\n3. Eat");
     expect(stepList("1. Slice\n2. Bake")).toEqual(["Slice", "Bake"]);
+  });
+});
+
+describe("event dates", () => {
+  it("Thanksgiving is the 4th Thursday of November", () => {
+    expect(isoDate(thanksgivingOf(2026))).toBe("2026-11-26");
+    expect(isoDate(thanksgivingOf(2027))).toBe("2027-11-25");
+    expect(isoDate(thanksgivingOf(2025))).toBe("2025-11-27");
+  });
+  it("rolls to next year a month after Thanksgiving", () => {
+    expect(isoDate(nextThanksgiving(new Date(2026, 10, 16)))).toBe("2026-11-26");
+    expect(isoDate(nextThanksgiving(new Date(2026, 11, 20)))).toBe("2026-11-26"); // still within 30 days
+    expect(isoDate(nextThanksgiving(new Date(2027, 0, 5)))).toBe("2027-11-25");
+  });
+  it("counts days and formats dates", () => {
+    expect(daysUntil(new Date(2026, 10, 26), new Date(2026, 10, 16, 23, 59))).toBe(10);
+    expect(fmtDate(parseISO("2026-12-05")!)).toBe("Sat, Dec 5");
+    expect(parseISO("nope")).toBeNull();
+  });
+  it("party plan shows real dates once a date is set, relative days before", () => {
+    const none = derive(base({ mode: "party" }));
+    expect(none.planDays.map((p) => p.label)).toContain("The day before");
+    const dated = derive(base({ mode: "party", partyDate: "2026-12-05" }));
+    expect(dated.planDays.map((p) => p.label)).toEqual(["Thu, Dec 3", "Fri, Dec 4"]);
+    expect(dated.planDays[1].sub).toBe("day before");
+  });
+  it("thanksgiving plan follows its date", () => {
+    expect(derive(base({ tgDate: "2027-11-25" })).planDays.some((p) => p.label === "Sat, Nov 20")).toBe(true); // 5 days before
+  });
+});
+
+describe("hiding dishes", () => {
+  it("a hidden dish disappears from the menu, grocery list and plan", () => {
+    const d = derive(base({ hidden: { turkey: true } }));
+    expect(d.all.some((r) => r.id === "turkey")).toBe(false);
+    expect(d.chosen.some((r) => r.id === "turkey")).toBe(false);
+    expect(d.turkey).toBeNull();
+    expect(d.grocery.some((g) => g.items.some((i) => i.name === "Whole turkey"))).toBe(false);
+  });
+});
+
+describe("post-event notes", () => {
+  const key = eventKey("tg", "2026-11-26");
+  it("event is over two hours after it starts", () => {
+    expect(isEventOver("2026-11-26", 16 * 60, new Date(2026, 10, 26, 17, 0))).toBe(false);
+    expect(isEventOver("2026-11-26", 16 * 60, new Date(2026, 10, 26, 18, 1))).toBe(true);
+    expect(isEventOver("", 16 * 60, new Date(2030, 0, 1))).toBe(false);
+  });
+  it("adds, updates and clears one review per dish", () => {
+    const t = new Date(2026, 10, 27);
+    let l = upsertReview([], { eventKey: key, dishId: "mash", dishName: "Mashed", verdict: "hit", note: "" }, t);
+    l = upsertReview(l, { eventKey: key, dishId: "mash", dishName: "Mashed", verdict: "hit", note: "more butter" }, t);
+    expect(l).toHaveLength(1);
+    expect(reviewFor(l, key, "mash")?.note).toBe("more butter");
+    expect(upsertReview(l, { eventKey: key, dishId: "mash", dishName: "Mashed", note: "  " }, t)).toHaveLength(0);
+  });
+  it("finds the latest note from a different event", () => {
+    const old = eventKey("tg", "2025-11-27");
+    let l = upsertReview([], { eventKey: old, dishId: "pecan", dishName: "Pecan pie", verdict: "miss", note: "too sweet" }, new Date(2025, 10, 28));
+    l = upsertReview(l, { eventKey: key, dishId: "pecan", dishName: "Pecan pie", verdict: "hit", note: "" }, new Date(2026, 10, 27));
+    expect(latestFor(l, "pecan", key)?.verdict).toBe("miss");
+    expect(latestFor(l, "pecan")?.verdict).toBe("hit");
   });
 });

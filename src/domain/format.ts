@@ -4,9 +4,32 @@ const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const THANKSGIVING = new Date(2026, 10, 26);
 const PLURAL: Record<string, string> = { cup: "cups", can: "cans", bag: "bags", box: "boxes", jar: "jars", bunch: "bunches", stick: "sticks", pint: "pints", bottle: "bottles", sheet: "sheets", packet: "packets", clove: "cloves", head: "heads", pack: "packs", gallon: "gallons", quart: "quarts" };
 
-export function tgDay(daysBefore: number): string {
-  const d = new Date(THANKSGIVING.getFullYear(), THANKSGIVING.getMonth(), THANKSGIVING.getDate() - daysBefore);
-  return WD[d.getDay()] + ", " + MONTHS[d.getMonth()] + " " + d.getDate();
+const pad = (n: number) => (n < 10 ? "0" : "") + n;
+export const isoDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+export function parseISO(s: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || "");
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return isNaN(+d) ? null : d;
+}
+/** Thanksgiving is the 4th Thursday of November. */
+export function thanksgivingOf(year: number): Date {
+  const firstThu = 1 + ((4 - new Date(year, 10, 1).getDay() + 7) % 7);
+  return new Date(year, 10, firstThu + 21);
+}
+/** This year's Thanksgiving until 30 days after it, then next year's. */
+export function nextThanksgiving(today: Date): Date {
+  const t = thanksgivingOf(today.getFullYear());
+  const cutoff = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 30);
+  return today > cutoff ? thanksgivingOf(today.getFullYear() + 1) : t;
+}
+export const fmtDate = (d: Date) => WD[d.getDay()] + ", " + MONTHS[d.getMonth()] + " " + d.getDate();
+export const shiftDays = (base: Date, n: number) => new Date(base.getFullYear(), base.getMonth(), base.getDate() - n);
+export const tgDay = (daysBefore: number, base: Date = THANKSGIVING) => fmtDate(shiftDays(base, daysBefore));
+export function daysUntil(date: Date, now: Date = new Date()): number {
+  const a = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const b = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.round((a - b) / 86400000);
 }
 export function clock(m: number): string {
   const x = ((m % 1440) + 1440) % 1440; const h = Math.floor(x / 60), mm = x % 60;

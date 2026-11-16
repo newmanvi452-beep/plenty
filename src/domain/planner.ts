@@ -1,7 +1,7 @@
 // Pure planning logic (no UI): sizing, scaling, grocery list, and cooking timeline.
 // Ported from the Plenty prototype's renderVals().
 import { Dish, Ingredient, LIB, Mode, SECTIONS, Section, TG_CATS, PARTY_CATS, Category } from "./data";
-import { ceilTo, clock, frac, hm, qtyStr, round5, tgDay } from "./format";
+import { ceilTo, clock, frac, hm, parseISO, qtyStr, round5, shiftDays, fmtDate } from "./format";
 import { bestVolume, packaged, VOL } from "./packaging";
 
 /** A child eats about half as much as an adult. */
@@ -17,6 +17,11 @@ export interface PlannerState {
   partyStyle: PartyStyle;
   dinnerTG: number; // minutes after midnight
   partyTime: number;
+  /** event dates as YYYY-MM-DD; partyDate is empty until the user picks one */
+  tgDate: string;
+  partyDate: string;
+  /** dishes the user removed from their list */
+  hidden: Record<string, true>;
   selTG: Record<string, true>;
   selP: Record<string, true>;
   custom: Dish[];
@@ -153,6 +158,8 @@ export interface Derived {
   dayOf: DayOfTask[];
   ovenNote: string;
   turkey: { headline: string; thaw: string; roast: string; twoBirds: boolean } | null;
+  base: Date | null;
+  dayLabel: (n: number) => string;
   bringing: Record<string, { text: string; short: string; dishId?: string; extraId?: string }[]>;
 }
 
@@ -164,7 +171,9 @@ export function derive(s: PlannerState): Derived {
   const g = s.adults + s.kids * KID_FACTOR, left = s.leftovers;
   const sel = s[selKeyOf(mode)];
   const cats = isTG ? TG_CATS : PARTY_CATS;
-  const all = LIB.filter((r) => r.modes.includes(mode)).concat(s.custom.filter((c) => c.mode === mode));
+  const all = LIB.filter((r) => r.modes.includes(mode)).concat(s.custom.filter((c) => c.mode === mode)).filter((r) => !s.hidden[r.id]);
+  const base = parseISO(isTG ? s.tgDate : s.partyDate);
+  const dayLabel = (n: number) => (base ? fmtDate(shiftDays(base, n)) : n === 1 ? "The day before" : n + " days before");
   const chosen = all.filter((r) => sel[r.id]);
   const counts: Record<string, number> = {};
   cats.forEach((c) => (counts[c.key] = 0));
@@ -260,7 +269,7 @@ export function derive(s: PlannerState): Derived {
       addD(10, "tk-7", "Carve the turkey", tag);
       turkey = {
         headline: tl > 24 ? tl + " lb total (2 birds)" : tl + " lb bird",
-        thaw: "Start thawing in the fridge " + tgDay(start),
+        thaw: "Start thawing in the fridge " + dayLabel(start),
         roast: "Into the oven at " + clock(round5(serveTime - inAt)) + " · roasts ~" + hm(rm),
         twoBirds: tl > 24,
       };
@@ -293,11 +302,11 @@ export function derive(s: PlannerState): Derived {
 
   const planDays = Object.keys(aheadMap).map(Number).sort((a, b) => b - a).map((d) => ({
     daysBefore: d,
-    label: isTG ? tgDay(d) : d === 1 ? "The day before" : d + " days before",
-    sub: isTG ? (d === 1 ? "day before" : d + " days before") : "",
+    label: dayLabel(d),
+    sub: base ? (d === 1 ? "day before" : d + " days before") : "",
     tasks: aheadMap[d],
   }));
   const dayOf = dayOfRaw.sort((a, b) => b.min - a.min).map((t) => ({ ...t, time: clock(round5(serveTime - t.min)) }));
 
-  return { cats, all, chosen, mine, counts, rec, scale, bringerOf, grocery, planDays, dayOf, ovenNote, turkey, bringing };
+  return { cats, all, chosen, mine, counts, rec, scale, bringerOf, grocery, planDays, dayOf, ovenNote, turkey, bringing, base, dayLabel };
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Dish } from "./domain/data";
-import { clock, hourLabel, tgDay } from "./domain/format";
+import { Dish, LIB } from "./domain/data";
+import { daysUntil, fmtDate, hourLabel, parseISO } from "./domain/format";
+import { dateOfKey, eventKey, isEventOver, latestFor, reviewFor, upsertReview, VERDICTS, Verdict } from "./domain/review";
 import { bringKey, cookText, derive, KID_FACTOR, selKeyOf, Derived } from "./domain/planner";
 import { buildCustomDish, cleanOcr, numberSteps, parseRecipeText, stepList } from "./domain/recipe";
 import { extractRecipeText } from "./domain/ocr";
@@ -37,6 +38,7 @@ export default function App() {
     menu: ["Menu", `${d.chosen.length} dishes picked`],
     shop: ["Groceries", `${gTotal - gGot} of ${gTotal} left to grab`],
     plan: ["Cooking plan", `${pDone} of ${planKeys.length} tasks done`],
+    notes: ["Notes", "What worked, what to change"],
   };
   const go = (tab: Tab) => { setDetail(null); setShowForm(false); patch({ tab }); };
 
@@ -54,9 +56,10 @@ export default function App() {
         {s.tab === "menu" && <Menu s={s} d={d} patch={patch} open={setDetail} openForm={() => setShowForm(true)} />}
         {s.tab === "shop" && <Shop s={s} d={d} patch={patch} />}
         {s.tab === "plan" && <Plan s={s} d={d} patch={patch} />}
+        {s.tab === "notes" && <Notes s={s} d={d} patch={patch} goHome={() => go("home")} />}
       </main>
       <nav className="tabs" aria-label="Sections">
-        {([["home", "Home", "⌂"], ["menu", "Menu", "☰"], ["shop", "Groceries", "🛒"], ["plan", "Plan", "✓"]] as const).map(([k, l, i]) => (
+        {([["home", "Home", "⌂"], ["menu", "Menu", "☰"], ["shop", "Groceries", "🛒"], ["plan", "Plan", "✓"], ["notes", "Notes", "✎"]] as const).map(([k, l, i]) => (
           <button key={k} aria-pressed={s.tab === k} onClick={() => go(k)}><span aria-hidden="true" style={{ fontSize: 20 }}>{i}</span>{l}</button>
         ))}
       </nav>
@@ -84,6 +87,15 @@ function Home({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
   const serve = isTG ? s.dinnerTG : s.partyTime;
   const total = s.adults + s.kids;
   const pies = d.chosen.filter((r) => r.noun?.[0] === "pie").reduce((a, r) => a + d.scale(r).mult, 0);
+  const dateStr = isTG ? s.tgDate : s.partyDate, date = parseISO(dateStr);
+  const over = isEventOver(dateStr, serve);
+  const until = date ? daysUntil(date) : null;
+  const countdown = until === null ? "" : over ? "This one’s done. Add your notes!" : until > 1 ? `${until} days to go` : until === 1 ? "Tomorrow!" : until === 0 ? "Today!" : "";
+  const setPartyDate = (v: string) => patch((st) => {
+    // Picking a new date after the last party is over starts fresh checklists.
+    const stale = isEventOver(st.partyDate, st.partyTime) && v !== st.partyDate;
+    return stale ? { partyDate: v, got: Object.fromEntries(Object.entries(st.got).filter(([k]) => !k.startsWith("g:party:"))), done: Object.fromEntries(Object.entries(st.done).filter(([k]) => !k.startsWith("party:"))) } : { partyDate: v };
+  });
   const note = isTG ? `For ${total} guests${pies ? ` · ${pies} ${pies === 1 ? "pie" : "pies"} total` : ""}`
     : s.partyStyle === "apps" ? "Plan on 10–12 bites per guest" : "A hearty main plus easy sides";
   return (<>
@@ -91,10 +103,15 @@ function Home({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
       <button aria-pressed={isTG} onClick={() => patch({ mode: "tg" })}>Thanksgiving</button>
       <button aria-pressed={!isTG} onClick={() => patch({ mode: "party" })}>Party</button>
     </div>
+    {over && <section className="card" aria-label="Notes prompt"><h2>How did it go?</h2><p className="sub">Mark each dish a hit or a miss and jot notes for next time.</p><button className="btn" onClick={() => patch({ tab: "notes" })}>Add notes</button></section>}
     <section className="hero" aria-label="Your event">
-      <div><p className="kicker">{isTG ? "Thanksgiving · Thu, Nov 26" : "Party planner"}</p>
+      <div><p className="kicker">{isTG ? `Thanksgiving · ${date ? fmtDate(date) : ""}` : date ? `Party · ${fmtDate(date)}` : "Party planner"}</p>
         <h2>{isTG ? `Dinner for ${total}` : `${s.partyStyle === "apps" ? "Snacks & apps for " : "A party for "}${total}`}</h2>
-        {s.kids > 0 && <p className="sub" style={{ margin: "4px 0 0" }}>{s.adults} adult{s.adults === 1 ? "" : "s"} + {s.kids} kid{s.kids === 1 ? "" : "s"} (kids count as {KID_FACTOR === 0.5 ? "half a portion" : "a smaller portion"})</p>}</div>
+        {s.kids > 0 && <p className="sub" style={{ margin: "4px 0 0" }}>{s.adults} adult{s.adults === 1 ? "" : "s"} + {s.kids} kid{s.kids === 1 ? "" : "s"} (kids count as {KID_FACTOR === 0.5 ? "half a portion" : "a smaller portion"})</p>}
+        {countdown && <p className="sub" style={{ margin: "4px 0 0", fontWeight: 800 }}>{countdown}</p>}</div>
+      {!isTG && <div className="field"><label htmlFor="pdate">When’s the party?</label>
+        <input id="pdate" type="date" value={s.partyDate} onChange={(e) => setPartyDate(e.target.value)} />
+        {!s.partyDate && <p className="sub" style={{ margin: 0 }}>Add the date to get dated reminders on your plan and a place for notes afterward.</p>}</div>}
       <Stepper id="adults" label="Adults" value={s.adults} min={1} onChange={(adults) => patch({ adults })} />
       <Stepper id="kids" label="Kids" value={s.kids} min={0} onChange={(kids) => patch({ kids })} />
       <div className="stack" style={{ gap: 8 }}><span className="label">{isTG ? "Dinner at" : "Party starts at"}</span>
@@ -120,6 +137,8 @@ function Home({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
 
 function Menu({ s, d, patch, open, openForm }: { s: AppState; d: Derived; patch: Patch; open: (id: string) => void; openForm: () => void }) {
   const key = selKeyOf(s.mode);
+  const evKey = eventKey(s.mode, s.mode === "tg" ? s.tgDate : s.partyDate);
+  const hiddenDishes = LIB.filter((r) => r.modes.includes(s.mode)).concat(s.custom.filter((c) => c.mode === s.mode)).filter((r) => s.hidden[r.id]);
   const toggle = (id: string) => patch((st) => ({ [key]: toggleIn(st[key], id) }) as Partial<AppState>);
   return (<>
     <button className="btn dashed" onClick={openForm}>+ Add your own recipe</button>
@@ -131,11 +150,16 @@ function Menu({ s, d, patch, open, openForm }: { s: AppState; d: Derived; patch:
             <button className="pick" aria-pressed={on} onClick={() => toggle(x.id)}>
               <span className="check">{on && <Check />}</span>
               <span className="stack" style={{ gap: 4 }}><b style={{ fontSize: 16 }}>{x.name}</b><span className="sub" style={{ margin: 0 }}>{x.meta}</span>
-                {on && <span className="badge">{d.scale(x).badge}</span>}{on && who && <span className="tag ok">{who} is bringing it</span>}</span>
+                {on && <span className="badge">{d.scale(x).badge}</span>}{on && who && <span className="tag ok">{who} is bringing it</span>}
+                {(() => { const lv = latestFor(s.reviews, x.id, evKey); const v = VERDICTS.find((q) => q.key === lv?.verdict); return v ? <span className="tag">{v.emoji} {v.label} last time</span> : null; })()}</span>
             </button>
             <button className="info" aria-label={`Details for ${x.name}`} onClick={() => open(x.id)}>›</button>
           </div>); })}</div>
       </section>); })}
+    {!!hiddenDishes.length && <section className="card done"><details><summary>Hidden dishes · {hiddenDishes.length}</summary>
+      {hiddenDishes.map((x) => <div className="row" key={x.id} style={{ padding: "6px 0" }}><span>{x.name}</span>
+        <button className="chip" onClick={() => patch((st) => { const h = { ...st.hidden }; delete h[x.id]; return { hidden: h }; })}>Restore</button></div>)}
+    </details></section>}
   </>);
 }
 
@@ -193,6 +217,46 @@ function Plan({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
   </>);
 }
 
+function Notes({ s, d, patch, goHome }: { s: AppState; d: Derived; patch: Patch; goHome: () => void }) {
+  const isTG = s.mode === "tg";
+  const dateStr = isTG ? s.tgDate : s.partyDate, date = parseISO(dateStr);
+  const key = eventKey(s.mode, dateStr);
+  const over = isEventOver(dateStr, isTG ? s.dinnerTG : s.partyTime);
+  const title = isTG ? "Thanksgiving" : "Your party";
+  const setReview = (dish: Dish, change: { verdict?: Verdict; note?: string }) => patch((st) => {
+    const cur = reviewFor(st.reviews, key, dish.id);
+    const verdict = change.verdict !== undefined ? (change.verdict === cur?.verdict ? undefined : change.verdict) : cur?.verdict;
+    const note = change.note !== undefined ? change.note : cur?.note ?? "";
+    return { reviews: upsertReview(st.reviews, { eventKey: key, dishId: dish.id, dishName: dish.name, verdict, note }) };
+  });
+  const pastKeys = Array.from(new Set(s.reviews.map((r) => r.eventKey).concat(Object.keys(s.eventNotes).filter((k) => s.eventNotes[k])))).filter((k) => k !== key).sort().reverse();
+  const label = (k: string) => { const dt = parseISO(dateOfKey(k)); return (k.startsWith("tg:") ? "Thanksgiving" : "Party") + (dt ? ` · ${fmtDate(dt)} ${dt.getFullYear()}` : ""); };
+  return (<>
+    <section className="hero" aria-label="This event">
+      <div><p className="kicker">{title}{date ? ` · ${fmtDate(date)} ${date.getFullYear()}` : ""}</p>
+        <h2>{over ? "How did it go?" : "Notes for next time"}</h2></div>
+      <p className="sub" style={{ margin: 0 }}>{over ? "Mark each dish a hit, maybe or a miss, and add anything you’d change. You’ll see this next time you plan."
+        : !isTG && !date ? "Add your party date on Home so these notes can be filed under the right event." : "Come back after the event, or jot notes any time."}</p>
+      {!isTG && !date && <button className="btn" onClick={goHome}>Add the party date</button>}
+    </section>
+    {d.chosen.length === 0 && <p className="empty">Pick some dishes on the Menu first.</p>}
+    {d.chosen.map((dish) => { const rv = reviewFor(s.reviews, key, dish.id); const who = d.bringerOf(dish); return (
+      <section className="card" key={dish.id} aria-label={dish.name}>
+        <div><h2 style={{ fontSize: 18 }}>{dish.name}</h2>{who && <p className="sub">{who} brought this</p>}</div>
+        <div className="chips" role="group" aria-label={`Rate ${dish.name}`}>{VERDICTS.map((v) => (
+          <button key={v.key} className="chip" aria-pressed={rv?.verdict === v.key} onClick={() => setReview(dish, { verdict: v.key })}>{v.emoji} {v.label}</button>))}</div>
+        <textarea className="note" rows={2} aria-label={`Notes on ${dish.name}`} placeholder="Too sweet? Needed more time? Everyone asked for the recipe?" value={rv?.note ?? ""} onChange={(e) => setReview(dish, { note: e.target.value })} />
+      </section>); })}
+    <section className="card" aria-label="Overall notes"><h2 style={{ fontSize: 18 }}>Overall</h2>
+      <textarea className="note" rows={3} aria-label="Overall notes" placeholder="How was the timing? Too much food? Who to invite next time?" value={s.eventNotes[key] ?? ""} onChange={(e) => patch((st) => ({ eventNotes: { ...st.eventNotes, [key]: e.target.value } }))} /></section>
+    {!!pastKeys.length && <section className="card done"><h2 style={{ fontSize: 18 }}>Past events</h2>
+      {pastKeys.map((k) => <details key={k}><summary>{label(k)}</summary>
+        {s.eventNotes[k] && <p className="sub" style={{ margin: "6px 0" }}>{s.eventNotes[k]}</p>}
+        {s.reviews.filter((r) => r.eventKey === k).map((r) => { const v = VERDICTS.find((q) => q.key === r.verdict); return <div key={r.id} className="pastnote"><b>{v ? v.emoji + " " : ""}{r.dishName}</b>{r.note && <span>{r.note}</span>}</div>; })}
+      </details>)}</section>}
+  </>);
+}
+
 function Potluck({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
   const [who, setWho] = useState(""), [what, setWhat] = useState(""), [err, setErr] = useState("");
   const names = Object.keys(d.bringing);
@@ -236,9 +300,22 @@ function DetailSheet({ id, s, d, patch, close }: { id: string; s: AppState; d: D
   const toggle = () => patch((st) => ({ [key]: toggleIn(st[key], r.id) }) as Partial<AppState>);
   const addNew = () => { const n = name.trim().replace(/\s+/g, " "); if (!n) return; assign(s.people.find((p) => p.toLowerCase() === n.toLowerCase()) || n); setName(""); };
   const steps = [
-    ...r.ahead.map((a) => `${s.mode === "tg" ? tgDay(a[0]) : a[0] === 1 ? "The day before" : a[0] + " days before"}: ${a[1]}`),
+    ...r.ahead.map((a) => `${d.dayLabel(a[0])}: ${a[1]}`),
     ...[...r.day].sort((a, b) => b[0] - a[0]).map((a) => `${a[0] >= 0 ? fmtMin(a[0]) + " before serving" : fmtMin(-a[0]) + " after sitting down"}: ${a[1]}`),
   ];
+  const past = s.reviews.filter((x) => x.dishId === r.id).sort((a, b) => b.updated.localeCompare(a.updated));
+  const forget = (st: AppState): Partial<AppState> => {
+    const bringers = Object.fromEntries(Object.entries(st.bringers).filter(([k]) => k !== bringKey("tg", r.id) && k !== bringKey("party", r.id)));
+    const selTG = { ...st.selTG }, selP = { ...st.selP }; delete selTG[r.id]; delete selP[r.id];
+    return { bringers, selTG, selP };
+  };
+  const remove = () => {
+    if (r.custom) {
+      if (!window.confirm(`Delete “${r.name}”? This removes the recipe and its notes for good.`)) return;
+      patch((st) => ({ ...forget(st), custom: st.custom.filter((c) => c.id !== r.id), reviews: st.reviews.filter((x) => x.dishId !== r.id) }));
+    } else patch((st) => ({ ...forget(st), hidden: { ...st.hidden, [r.id]: true } }));
+    close();
+  };
   return (
     <div className="sheet" onClick={close}><div role="dialog" aria-label={r.name} onClick={(e) => e.stopPropagation()}>
       <div className="row"><h2>{r.name}</h2><button className="round" aria-label="Close" onClick={close}>✕</button></div>
@@ -248,6 +325,9 @@ function DetailSheet({ id, s, d, patch, close }: { id: string; s: AppState; d: D
       <div>{r.ing.map((x, i) => <div className="ing" key={i}><b>{cookText(x[1] * sc.mult, x[2], x[0])}</b><span>{x[0]}</span></div>)}</div>
       {!!r.directions?.length && <div><span className="label">Directions</span><ol className="steps">{r.directions.map((t, i) => <li key={i}>{t}</li>)}</ol></div>}
       {!!steps.length && <div><span className="label">{r.directions?.length ? "On your timeline" : "Steps & timing"}</span><ol className="steps">{steps.map((t, i) => <li key={i}>{t}</li>)}</ol></div>}
+      {!!past.length && <div><span className="label">Your notes from past events</span>
+        <div className="stack" style={{ gap: 8, marginTop: 8 }}>{past.map((x) => { const v = VERDICTS.find((q) => q.key === x.verdict), dt = parseISO(dateOfKey(x.eventKey));
+          return <div key={x.id} className="pastnote"><b>{v ? `${v.emoji} ${v.label}` : "Note"}{dt ? ` · ${fmtDate(dt)} ${dt.getFullYear()}` : ""}</b>{x.note && <span>{x.note}</span>}</div>; })}</div></div>}
       <div className="stack" style={{ gap: 8 }}><span className="label">Who’s making it?</span>
         <div className="chips" style={{ flexWrap: "wrap" }}>
           {[{ l: "Me", v: "" }, ...s.people.map((p) => ({ l: p, v: p }))].map((o) => <button key={o.l} className="chip" aria-pressed={cur === o.v} onClick={() => assign(o.v)}>{o.l}</button>)}</div>
@@ -255,6 +335,7 @@ function DetailSheet({ id, s, d, patch, close }: { id: string; s: AppState; d: D
           <button className="btn ghost" onClick={addNew}>Assign</button></div>
         {cur && <p className="sub" style={{ margin: 0 }}>{cur} is on it. This dish is off your grocery list and cooking plan, so send {cur} the amounts above.</p>}</div>
       <button className={on ? "btn ghost" : "btn"} onClick={toggle}>{on ? "Remove from menu" : "Add to menu"}</button>
+      <button className="btn danger" onClick={remove}>{r.custom ? "Delete this recipe" : "Hide from my list"}</button>
     </div></div>);
 }
 
