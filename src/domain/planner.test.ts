@@ -279,3 +279,50 @@ describe("post-event notes", () => {
     expect(latestFor(l, "pecan")?.verdict).toBe("hit");
   });
 });
+
+describe("guest claims", () => {
+  const s0 = { bringers: {}, extras: [], people: [], claimSync: {} };
+  const claim = (id: string, dish: string | null, name: string, what: string | null = null) => ({ id, dish_id: dish, name, what });
+  it("a claimed dish gets a bringer and leaves the grocery list", async () => {
+    const { applyClaims } = await import("./sharing");
+    const patch = applyClaims(s0, "tg", ["mash", "turkey"], [claim("1", "turkey", "Aunt May")]);
+    expect(patch.bringers).toEqual({ "tg:turkey": "Aunt May" });
+    expect(patch.people).toEqual(["Aunt May"]);
+    const d = derive(base({ bringers: patch.bringers! }));
+    expect(d.grocery.some((g) => g.items.some((i) => i.name === "Whole turkey"))).toBe(false);
+  });
+  it("free-text extras show up under who's bringing what, and are replaced on each sync", async () => {
+    const { applyClaims } = await import("./sharing");
+    const p1 = applyClaims(s0, "tg", [], [claim("a", null, "Bob", "ice")]);
+    expect(p1.extras).toEqual([{ id: "sc-a", who: "Bob", what: "ice", mode: "tg" }]);
+    const p2 = applyClaims({ ...s0, ...p1 } as any, "tg", [], [claim("b", null, "Cara", "napkins")]);
+    expect(p2.extras).toEqual([{ id: "sc-b", who: "Cara", what: "napkins", mode: "tg" }]);
+  });
+  it("never overwrites an owner's manual choice, and cleans up when a guest backs out", async () => {
+    const { applyClaims } = await import("./sharing");
+    const manual = applyClaims({ ...s0, bringers: { "tg:mash": "Me-picked Dana" } }, "tg", ["mash"], [claim("1", "mash", "Aunt May")]);
+    expect(manual.bringers).toEqual({ "tg:mash": "Me-picked Dana" });
+    const on = applyClaims(s0, "tg", ["mash"], [claim("1", "mash", "Aunt May")]);
+    const off = applyClaims({ ...s0, ...on } as any, "tg", ["mash"], []);
+    expect(off.bringers).toEqual({});
+    expect(off.claimSync).toEqual({});
+  });
+  it("keeps the owner's own extras", async () => {
+    const { applyClaims } = await import("./sharing");
+    const own = { id: "x1", who: "Me", what: "wine", mode: "tg" as const };
+    expect(applyClaims({ ...s0, extras: [own] }, "tg", [], []).extras).toEqual([own]);
+  });
+});
+
+describe("snapshot", () => {
+  it("includes only chosen dishes with amounts scaled for the guest list", async () => {
+    const { buildSnapshot } = await import("./sharing");
+    const { cookText } = await import("./planner");
+    const snap = buildSnapshot(derive(base()), cookText);
+    expect(snap.dishes).toHaveLength(Object.keys(DEFAULT_TG).length ? DEFAULT_TG.length : 0);
+    const mash = snap.dishes.find((x) => x.id === "mash")!;
+    expect(mash).toMatchObject({ name: "Creamy Mashed Potatoes", catLabel: "Sides" });
+    expect(mash.ing.length).toBeGreaterThan(3);
+    expect(JSON.stringify(snap)).not.toMatch(/edit|token/i);
+  });
+});

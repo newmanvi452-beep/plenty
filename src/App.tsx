@@ -6,6 +6,7 @@ import { bringKey, cookText, derive, KID_FACTOR, selKeyOf, Derived } from "./dom
 import { buildCustomDish, cleanOcr, numberSteps, parseRecipeText, stepList } from "./domain/recipe";
 import { extractRecipeText } from "./domain/ocr";
 import { AppState, Tab, useAppState } from "./store";
+import { ShareApi, useShare } from "./share/useShare";
 
 type Patch = (p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 const Check = () => <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>;
@@ -25,6 +26,7 @@ function Completed({ count, children }: { count: number; children: React.ReactNo
 export default function App() {
   const [s, patch] = useAppState();
   const d = derive(s);
+  const share = useShare(s, d, patch);
   const [detail, setDetail] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   useEffect(() => { document.documentElement.dataset.mode = s.mode; }, [s.mode]);
@@ -52,7 +54,7 @@ export default function App() {
         <span className="pill">{s.adults + s.kids} guests</span>
       </header>
       <main>
-        {s.tab === "home" && <Home s={s} d={d} patch={patch} />}
+        {s.tab === "home" && <Home s={s} d={d} patch={patch} share={share} />}
         {s.tab === "menu" && <Menu s={s} d={d} patch={patch} open={setDetail} openForm={() => setShowForm(true)} />}
         {s.tab === "shop" && <Shop s={s} d={d} patch={patch} />}
         {s.tab === "plan" && <Plan s={s} d={d} patch={patch} />}
@@ -81,7 +83,28 @@ function Stepper({ id, label, value, min, onChange }: { id: string; label: strin
       </div></div>);
 }
 
-function Home({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
+function ShareCard({ share }: { share: ShareApi }) {
+  const [copied, setCopied] = useState(false);
+  if (!share.enabled) return null;
+  const copy = async () => { try { await navigator.clipboard.writeText(share.url); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { window.prompt("Copy this link", share.url); } };
+  const send = () => (navigator as Navigator & { share?: (d: { title: string; url: string }) => Promise<void> }).share?.({ title: "Plenty menu", url: share.url }).catch(() => {});
+  return (
+    <section className="card" aria-label="Share with guests">
+      <div><h2>Share with guests</h2>
+        <p className="sub">{share.share ? "Anyone with this link can see the menu and amounts and sign up to bring a dish. Only you can change the menu." : "Send guests a link so they can see the menu and tell you what they’ll bring. Your notes stay private."}</p></div>
+      {share.share ? <>
+        <input className="num" style={{ width: "100%", textAlign: "left", padding: "0 12px", fontSize: 14 }} readOnly aria-label="Share link" value={share.url} onFocus={(e) => e.target.select()} />
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn" style={{ flex: 1 }} onClick={copy}>{copied ? "Copied!" : "Copy link"}</button>
+          {"share" in navigator && <button className="btn ghost" style={{ flex: 1 }} onClick={send}>Send…</button>}</div>
+        <p className="sub" style={{ margin: 0 }} role="status">{share.status === "saving" ? "Updating the shared menu…" : "Shared menu is up to date"}{share.claimCount ? ` · ${share.claimCount} sign-up${share.claimCount === 1 ? "" : "s"}` : ""}</p>
+        <button className="btn danger" disabled={share.busy} onClick={share.stop}>Stop sharing</button></>
+        : <button className="btn" disabled={share.busy} onClick={share.create}>{share.busy ? "Creating link…" : "Create a share link"}</button>}
+      {share.error && <p className="err" role="alert">{share.error}</p>}
+    </section>);
+}
+
+function Home({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch; share: ShareApi }) {
   const isTG = s.mode === "tg";
   const times = isTG ? [12, 13, 14, 15, 16, 17, 18] : [12, 14, 17, 18, 19, 20];
   const serve = isTG ? s.dinnerTG : s.partyTime;
@@ -132,6 +155,7 @@ function Home({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
       <p className="sub">{d.turkey.thaw}</p><p className="sub">{d.turkey.roast}</p>
       {d.turkey.twoBirds && <p className="sub">Two birds: roast side by side, or one at a time if your oven is small.</p>}</section>}
     <button className="btn" onClick={() => patch({ tab: "menu" })}>Pick your menu</button>
+    <ShareCard share={share} />
   </>);
 }
 

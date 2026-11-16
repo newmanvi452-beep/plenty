@@ -3,6 +3,7 @@ import { DEFAULT_PARTY, DEFAULT_TG } from "./domain/data";
 import { PlannerState } from "./domain/planner";
 import { isoDate, nextThanksgiving, parseISO } from "./domain/format";
 import { Review } from "./domain/review";
+import { Mode } from "./domain/data";
 
 export type Tab = "home" | "menu" | "shop" | "plan" | "notes";
 export interface AppState extends PlannerState {
@@ -14,6 +15,9 @@ export interface AppState extends PlannerState {
   /** post-event notes, newest data wins per dish+event */
   reviews: Review[];
   eventNotes: Record<string, string>;
+  /** one share link per planner mode; `token` is the owner's secret and never leaves this device */
+  shares: Partial<Record<Mode, { slug: string; token: string }>>;
+  claimSync: Record<string, string>;
 }
 
 const KEY = "plenty:v1";
@@ -23,7 +27,7 @@ export const initialState = (): AppState => ({
   mode: "tg", adults: 12, kids: 0, leftovers: false, partyStyle: "meal", dinnerTG: 16 * 60, partyTime: 19 * 60,
   tgDate: isoDate(nextThanksgiving(new Date())), partyDate: "", hidden: {},
   selTG: ids(DEFAULT_TG), selP: ids(DEFAULT_PARTY), custom: [], bringers: {}, extras: [],
-  tab: "home", planView: "before", got: {}, done: {}, people: [], reviews: [], eventNotes: {},
+  tab: "home", planView: "before", got: {}, done: {}, people: [], reviews: [], eventNotes: {}, shares: {}, claimSync: {},
 });
 
 function load(): AppState {
