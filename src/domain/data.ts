@@ -23,6 +23,10 @@ export interface Dish {
   ing: Ingredient[];
   ahead: Step[];
   day: Step[];
+  /** custom recipes only */
+  prep?: number;
+  cook?: number;
+  directions?: string[];
 }
 
 export interface Category { key: string; label: string; hint: string }

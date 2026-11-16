@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Dish } from "./domain/data";
-import { hourLabel } from "./domain/format";
-import { bringKey, cookText, derive, parseLine, selKeyOf, Derived } from "./domain/planner";
+import { clock, hourLabel, tgDay } from "./domain/format";
+import { bringKey, cookText, derive, KID_FACTOR, selKeyOf, Derived } from "./domain/planner";
+import { buildCustomDish, parseRecipeText } from "./domain/recipe";
 import { AppState, Tab, useAppState } from "./store";
 
 type Patch = (p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -11,6 +12,13 @@ const toneOf = (rec: number, picked: number) =>
   : picked === rec ? { t: "On track", c: "ok" }
   : picked < rec ? { t: `Add ${rec - picked} more`, c: "need" }
   : { t: `+${picked - rec} extra`, c: "" };
+const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} hr${m % 60 ? " " + (m % 60) + " min" : ""}` : `${m} min`);
+const toggleIn = (rec: Record<string, true>, k: string) => { const n = { ...rec }; if (n[k]) delete n[k]; else n[k] = true; return n; };
+
+function Completed({ count, children }: { count: number; children: React.ReactNode }) {
+  if (!count) return null;
+  return <section className="card done"><details open><summary>Completed · {count}</summary>{children}</details></section>;
+}
 
 export default function App() {
   const [s, patch] = useAppState();
@@ -38,7 +46,7 @@ export default function App() {
           <svg width="40" height="40" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="28" fill="var(--soft)" /><path d="M17 41c0-13 9-22 25-24-1 15-10 24-25 24z" fill="var(--mid)" /><path d="M17 41l16-16" stroke="var(--deep)" strokeWidth="2.5" strokeLinecap="round" fill="none" /></svg>
           <div><h1>{titles[s.tab][0]}</h1><p>{titles[s.tab][1]}</p></div>
         </div>
-        <span className="pill">{s.guests} guests</span>
+        <span className="pill">{s.adults + s.kids} guests</span>
       </header>
       <main>
         {s.tab === "home" && <Home s={s} d={d} patch={patch} />}
@@ -57,12 +65,25 @@ export default function App() {
   );
 }
 
+function Stepper({ id, label, value, min, onChange }: { id: string; label: string; value: number; min: number; onChange: (n: number) => void }) {
+  const clamp = (n: number) => Math.max(min, Math.min(80, n));
+  return (
+    <div className="row"><label className="label" htmlFor={id}>{label}</label>
+      <div className="row" style={{ gap: 8 }}>
+        <button className="round" aria-label={`Fewer ${label.toLowerCase()}`} onClick={() => onChange(clamp(value - 1))}>−</button>
+        <input id={id} className="num" type="number" min={min} max={80} value={value}
+          onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) onChange(clamp(v)); }} />
+        <button className="round" aria-label={`More ${label.toLowerCase()}`} onClick={() => onChange(clamp(value + 1))}>+</button>
+      </div></div>);
+}
+
 function Home({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
   const isTG = s.mode === "tg";
   const times = isTG ? [12, 13, 14, 15, 16, 17, 18] : [12, 14, 17, 18, 19, 20];
   const serve = isTG ? s.dinnerTG : s.partyTime;
+  const total = s.adults + s.kids;
   const pies = d.chosen.filter((r) => r.noun?.[0] === "pie").reduce((a, r) => a + d.scale(r).mult, 0);
-  const note = isTG ? `For ${s.guests} guests${pies ? ` · ${pies} ${pies === 1 ? "pie" : "pies"} total` : ""}`
+  const note = isTG ? `For ${total} guests${pies ? ` · ${pies} ${pies === 1 ? "pie" : "pies"} total` : ""}`
     : s.partyStyle === "apps" ? "Plan on 10–12 bites per guest" : "A hearty main plus easy sides";
   return (<>
     <div className="seg" role="group" aria-label="Planner mode">
@@ -71,14 +92,10 @@ function Home({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
     </div>
     <section className="hero" aria-label="Your event">
       <div><p className="kicker">{isTG ? "Thanksgiving · Thu, Nov 26" : "Party planner"}</p>
-        <h2>{isTG ? `Dinner for ${s.guests}` : `${s.partyStyle === "apps" ? "Snacks & apps for " : "A party for "}${s.guests}`}</h2></div>
-      <div className="row"><label className="label" htmlFor="guests">Guests</label>
-        <div className="row" style={{ gap: 8 }}>
-          <button className="round" aria-label="Fewer guests" onClick={() => patch({ guests: Math.max(1, s.guests - 1) })}>−</button>
-          <input id="guests" className="num" type="number" min={1} max={80} value={s.guests}
-            onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) patch({ guests: Math.max(1, Math.min(80, v)) }); }} />
-          <button className="round" aria-label="More guests" onClick={() => patch({ guests: Math.min(80, s.guests + 1) })}>+</button>
-        </div></div>
+        <h2>{isTG ? `Dinner for ${total}` : `${s.partyStyle === "apps" ? "Snacks & apps for " : "A party for "}${total}`}</h2>
+        {s.kids > 0 && <p className="sub" style={{ margin: "4px 0 0" }}>{s.adults} adult{s.adults === 1 ? "" : "s"} + {s.kids} kid{s.kids === 1 ? "" : "s"} (kids count as {KID_FACTOR === 0.5 ? "half a portion" : "a smaller portion"})</p>}</div>
+      <Stepper id="adults" label="Adults" value={s.adults} min={1} onChange={(adults) => patch({ adults })} />
+      <Stepper id="kids" label="Kids" value={s.kids} min={0} onChange={(kids) => patch({ kids })} />
       <div className="stack" style={{ gap: 8 }}><span className="label">{isTG ? "Dinner at" : "Party starts at"}</span>
         <div className="chips" role="group">{times.map((h) => (
           <button key={h} className="chip" aria-pressed={serve === h * 60} onClick={() => patch(isTG ? { dinnerTG: h * 60 } : { partyTime: h * 60 })}>{hourLabel(h * 60)}</button>))}</div></div>
@@ -102,7 +119,7 @@ function Home({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
 
 function Menu({ s, d, patch, open, openForm }: { s: AppState; d: Derived; patch: Patch; open: (id: string) => void; openForm: () => void }) {
   const key = selKeyOf(s.mode);
-  const toggle = (id: string) => patch((st) => { const cur = { ...st[key] }; if (cur[id]) delete cur[id]; else cur[id] = true; return { [key]: cur } as Partial<AppState>; });
+  const toggle = (id: string) => patch((st) => ({ [key]: toggleIn(st[key], id) }) as Partial<AppState>);
   return (<>
     {d.cats.map((c) => { const r = d.rec(c.key), t = toneOf(r, d.counts[c.key] || 0); return (
       <section key={c.key} aria-label={c.label}>
@@ -123,33 +140,54 @@ function Menu({ s, d, patch, open, openForm }: { s: AppState; d: Derived; patch:
 
 function Shop({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
   if (!d.grocery.length) return <p className="empty">Pick some dishes and your list shows up here.</p>;
+  const flip = (k: string) => patch((st) => ({ got: toggleIn(st.got, k) }));
+  const todo = d.grocery.map((g) => ({ ...g, items: g.items.filter((i) => !s.got[i.key]) })).filter((g) => g.items.length);
+  const got = d.grocery.flatMap((g) => g.items.filter((i) => s.got[i.key]));
   return (<>
-    {d.grocery.map((g) => (
+    {todo.map((g) => (
       <section className="card" key={g.section} aria-label={g.label}>
         <h2>{g.label} <span className="sub">· {g.items.length}</span></h2>
-        <div>{g.items.map((i) => { const on = !!s.got[i.key]; return (
-          <button key={i.key} className="item" aria-pressed={on} onClick={() => patch((st) => { const n = { ...st.got }; if (n[i.key]) delete n[i.key]; else n[i.key] = true; return { got: n }; })}>
-            <span className="box">{on && <Check />}</span>
-            <span className="txt"><b>{i.qty}</b> {i.name}<small>For {i.used.join(", ")}</small></span></button>); })}</div>
+        <div>{g.items.map((i) => (
+          <button key={i.key} className="item" aria-pressed={false} onClick={() => flip(i.key)}>
+            <span className="box" />
+            <span className="txt"><b>{i.buy}</b> {i.name}<small>{i.need ? `Recipes need ${i.need} · ` : ""}For {i.used.join(", ")}</small></span></button>))}</div>
       </section>))}
-    <button className="btn ghost" onClick={() => patch({ got: {} })}>Uncheck everything</button>
+    {!todo.length && <p className="empty">Everything's in the cart. 🎉</p>}
+    <Completed count={got.length}>
+      {got.map((i) => (
+        <button key={i.key} className="item" aria-pressed={true} onClick={() => flip(i.key)}>
+          <span className="box"><Check /></span><span className="txt"><b>{i.buy}</b> {i.name}</span></button>))}
+      <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => patch({ got: {} })}>Uncheck everything</button>
+    </Completed>
   </>);
 }
 
 function Plan({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
-  const task = (id: string, text: string, lead?: React.ReactNode, tag?: string) => { const k = s.mode + ":" + id, on = !!s.done[k]; return (
-    <button key={id} className="item" aria-pressed={on} onClick={() => patch((st) => { const n = { ...st.done }; if (n[k]) delete n[k]; else n[k] = true; return { done: n }; })}>
-      {lead}<span className="box">{on && <Check />}</span><span className="txt">{text}{tag && <small>{tag}</small>}</span></button>); };
+  const isDone = (id: string) => !!s.done[s.mode + ":" + id];
+  const flip = (id: string) => patch((st) => ({ done: toggleIn(st.done, st.mode + ":" + id) }));
+  const row = (id: string, text: string, on: boolean, lead?: React.ReactNode, tag?: string) => (
+    <button key={id} className="item" aria-pressed={on} onClick={() => flip(id)}>
+      {lead}<span className="box">{on && <Check />}</span><span className="txt">{text}{tag && <small>{tag}</small>}</span></button>);
+  const before = s.planView === "before";
+  const daysTodo = d.planDays.map((p) => ({ ...p, tasks: p.tasks.filter((t) => !isDone(t.id)) })).filter((p) => p.tasks.length);
+  const dayTodo = d.dayOf.filter((t) => !isDone(t.id));
+  const doneBefore = d.planDays.flatMap((p) => p.tasks.filter((t) => isDone(t.id)).map((t) => ({ ...t, day: p.label })));
+  const doneDay = d.dayOf.filter((t) => isDone(t.id));
+  const nothingLeft = before ? !daysTodo.length : !dayTodo.length;
   return (<>
     <div className="seg" role="group" aria-label="Plan view">
-      <button aria-pressed={s.planView === "before"} onClick={() => patch({ planView: "before" })}>Before</button>
-      <button aria-pressed={s.planView === "dayof"} onClick={() => patch({ planView: "dayof" })}>{s.mode === "tg" ? "Turkey Day" : "Party day"}</button>
+      <button aria-pressed={before} onClick={() => patch({ planView: "before" })}>Before</button>
+      <button aria-pressed={!before} onClick={() => patch({ planView: "dayof" })}>{s.mode === "tg" ? "Turkey Day" : "Party day"}</button>
     </div>
-    {s.planView === "before" && d.planDays.map((p) => (
-      <section className="card" key={p.daysBefore}><div><h2>{p.label}</h2>{p.sub && <p className="sub">{p.sub}</p>}</div>{p.tasks.map((t) => task(t.id, t.text))}</section>))}
-    {s.planView === "dayof" && <>
+    {before && daysTodo.map((p) => (
+      <section className="card" key={p.daysBefore}><div><h2>{p.label}</h2>{p.sub && <p className="sub">{p.sub}</p>}</div>{p.tasks.map((t) => row(t.id, t.text, false))}</section>))}
+    {!before && <>
       {d.ovenNote && <p className="sub" style={{ margin: 0 }}>{d.ovenNote}</p>}
-      <section className="card">{d.dayOf.map((t) => task(t.id, t.text, <span className="time">{t.time}</span>, t.tag))}</section></>}
+      {!!dayTodo.length && <section className="card">{dayTodo.map((t) => row(t.id, t.text, false, <span className="time">{t.time}</span>, t.tag))}</section>}</>}
+    {nothingLeft && <p className="empty">All caught up. 🎉</p>}
+    <Completed count={before ? doneBefore.length : doneDay.length}>
+      {before ? doneBefore.map((t) => row(t.id, t.text, true, undefined, t.day)) : doneDay.map((t) => row(t.id, t.text, true, <span className="time">{t.time}</span>, t.tag))}
+    </Completed>
     <Potluck s={s} d={d} patch={patch} />
   </>);
 }
@@ -194,8 +232,12 @@ function DetailSheet({ id, s, d, patch, close }: { id: string; s: AppState; d: D
     if (who) { p.people = st.people.includes(who) ? st.people : [...st.people, who]; p[key] = { ...st[key], [r.id]: true }; }
     return p;
   });
-  const toggle = () => patch((st) => { const c = { ...st[key] }; if (c[r.id]) delete c[r.id]; else c[r.id] = true; return { [key]: c } as Partial<AppState>; });
+  const toggle = () => patch((st) => ({ [key]: toggleIn(st[key], r.id) }) as Partial<AppState>);
   const addNew = () => { const n = name.trim().replace(/\s+/g, " "); if (!n) return; assign(s.people.find((p) => p.toLowerCase() === n.toLowerCase()) || n); setName(""); };
+  const steps = [
+    ...r.ahead.map((a) => `${s.mode === "tg" ? tgDay(a[0]) : a[0] === 1 ? "The day before" : a[0] + " days before"}: ${a[1]}`),
+    ...[...r.day].sort((a, b) => b[0] - a[0]).map((a) => `${a[0] >= 0 ? fmtMin(a[0]) + " before serving" : fmtMin(-a[0]) + " after sitting down"}: ${a[1]}`),
+  ];
   return (
     <div className="sheet" onClick={close}><div role="dialog" aria-label={r.name} onClick={(e) => e.stopPropagation()}>
       <div className="row"><h2>{r.name}</h2><button className="round" aria-label="Close" onClick={close}>✕</button></div>
@@ -203,10 +245,12 @@ function DetailSheet({ id, s, d, patch, close }: { id: string; s: AppState; d: D
       <span className="badge">{sc.badge}</span>
       <p className="sub" style={{ margin: 0 }}>{r.serves ? `Recipe serves ${r.serves} · ${r.meta}` : r.meta}</p>
       <div>{r.ing.map((x, i) => <div className="ing" key={i}><b>{cookText(x[1] * sc.mult, x[2], x[0])}</b><span>{x[0]}</span></div>)}</div>
+      {!!r.directions?.length && <div><span className="label">Directions</span><ol className="steps">{r.directions.map((t, i) => <li key={i}>{t}</li>)}</ol></div>}
+      {!!steps.length && <div><span className="label">{r.directions?.length ? "On your timeline" : "Steps & timing"}</span><ol className="steps">{steps.map((t, i) => <li key={i}>{t}</li>)}</ol></div>}
       <div className="stack" style={{ gap: 8 }}><span className="label">Who’s making it?</span>
         <div className="chips" style={{ flexWrap: "wrap" }}>
           {[{ l: "Me", v: "" }, ...s.people.map((p) => ({ l: p, v: p }))].map((o) => <button key={o.l} className="chip" aria-pressed={cur === o.v} onClick={() => assign(o.v)}>{o.l}</button>)}</div>
-        <div className="row"><input className="num" style={{ flex: 1, textAlign: "left", padding: "0 12px", fontSize: 16 }} aria-label="Add a person" placeholder="Add a person…" value={name} onChange={(e) => setName(e.target.value)} />
+        <div className="row"><input className="num" style={{ flex: 1, minWidth: 0, textAlign: "left", padding: "0 12px", fontSize: 16 }} aria-label="Add a person" placeholder="Add a person…" value={name} onChange={(e) => setName(e.target.value)} />
           <button className="btn ghost" onClick={addNew}>Assign</button></div>
         {cur && <p className="sub" style={{ margin: 0 }}>{cur} is on it. This dish is off your grocery list and cooking plan, so send {cur} the amounts above.</p>}</div>
       <button className={on ? "btn ghost" : "btn"} onClick={toggle}>{on ? "Remove from menu" : "Add to menu"}</button>
@@ -214,29 +258,47 @@ function DetailSheet({ id, s, d, patch, close }: { id: string; s: AppState; d: D
 }
 
 function FormSheet({ s, d, patch, close }: { s: AppState; d: Derived; patch: Patch; close: () => void }) {
-  const [f, setF] = useState({ name: "", cat: d.cats.some((c) => c.key === "sides") ? "sides" : d.cats[0].key, serves: "8", mins: "30", lines: "" });
-  const [err, setErr] = useState("");
+  const catKeys = d.cats.map((c) => c.key);
+  const [f, setF] = useState({ name: "", cat: catKeys.includes("sides") ? "sides" : catKeys[0], serves: "8", prep: "", cook: "", makeAhead: false, lines: "", steps: "" });
+  const [paste, setPaste] = useState(""), [err, setErr] = useState(""), [note, setNote] = useState("");
   const set = (p: Partial<typeof f>) => { setF({ ...f, ...p }); setErr(""); };
+  const sortOut = () => {
+    if (!paste.trim()) { setNote("Paste a recipe first."); return; }
+    const r = parseRecipeText(paste, catKeys);
+    setF({ name: r.name, cat: r.cat, serves: String(r.serves ?? (f.serves || 8)), prep: r.prep ? String(r.prep) : "", cook: r.cook ? String(r.cook) : "", makeAhead: f.makeAhead, lines: r.ingredients.join("\n"), steps: r.directions.join("\n") });
+    const missing = [!r.ingredients.length && "ingredients", !r.directions.length && "directions", !(r.prep || r.cook) && "prep/cook times"].filter(Boolean);
+    setNote(missing.length ? `Sorted. I couldn’t find ${missing.join(", ")}, so please check below.` : "Sorted. Give it a quick look, then save.");
+    setErr("");
+  };
   const save = () => {
     const name = f.name.trim(), lines = f.lines.split("\n").map((x) => x.trim()).filter(Boolean);
+    const prep = Math.max(0, parseInt(f.prep, 10) || 0), cook = Math.max(0, parseInt(f.cook, 10) || 0);
     if (!name) return setErr("Give your recipe a name.");
     if (!lines.length) return setErr("Add at least one ingredient line.");
-    const serves = Math.max(1, parseInt(f.serves, 10) || 4), mins = Math.max(0, parseInt(f.mins, 10) || 0);
-    const id = "c" + Date.now(), key = selKeyOf(s.mode);
-    const rec: Dish = { id, name, short: name, cat: f.cat, mode: s.mode, modes: [s.mode], serves, custom: true,
-      meta: mins ? `Start ${mins} min before serving` : "Your recipe", blurb: "Your recipe, scaled automatically.",
-      ing: lines.map(parseLine), ahead: [], day: mins ? [[mins, "Start " + name]] : [] };
-    patch((st) => ({ custom: [...st.custom, rec], [key]: { ...st[key], [id]: true } }) as Partial<AppState>);
+    if (!prep && !cook) return setErr("Add a prep or cook time so it can go on the timeline.");
+    const rec: Dish = buildCustomDish({ name, cat: f.cat, mode: s.mode, serves: parseInt(f.serves, 10) || 4, prep, cook, makeAhead: f.makeAhead, ingredients: lines, directions: f.steps.split("\n").map((x) => x.trim()).filter(Boolean) });
+    const key = selKeyOf(s.mode);
+    patch((st) => ({ custom: [...st.custom, rec], [key]: { ...st[key], [rec.id]: true } }) as Partial<AppState>);
     close();
   };
   return (
     <div className="sheet" onClick={close}><div role="dialog" aria-label="Add your own recipe" onClick={(e) => e.stopPropagation()}>
       <div className="row"><h2>Add your own recipe</h2><button className="round" aria-label="Close" onClick={close}>✕</button></div>
+      <div className="field"><label htmlFor="rp">Paste a whole recipe</label>
+        <textarea id="rp" rows={4} placeholder="Paste the title, ingredients and directions here and tap Sort it out" value={paste} onChange={(e) => { setPaste(e.target.value); setNote(""); }} />
+        <button className="btn ghost" onClick={sortOut}>Sort it out</button>
+        {note && <p className="sub" style={{ margin: 0 }} role="status">{note}</p>}</div>
       <div className="field"><label htmlFor="rn">Name</label><input id="rn" value={f.name} onChange={(e) => set({ name: e.target.value })} /></div>
       <div className="chips" style={{ flexWrap: "wrap" }}>{d.cats.map((c) => <button key={c.key} className="chip" aria-pressed={f.cat === c.key} onClick={() => set({ cat: c.key })}>{c.label}</button>)}</div>
-      <div className="row"><div className="field" style={{ flex: 1 }}><label htmlFor="rs">Serves</label><input id="rs" inputMode="numeric" value={f.serves} onChange={(e) => set({ serves: e.target.value })} /></div>
-        <div className="field" style={{ flex: 1 }}><label htmlFor="rm">Start (min before)</label><input id="rm" inputMode="numeric" value={f.mins} onChange={(e) => set({ mins: e.target.value })} /></div></div>
-      <div className="field"><label htmlFor="rl">Ingredients, one per line</label><textarea id="rl" rows={6} placeholder={"2 lb potatoes\n1/2 cup butter\n1 tsp salt"} value={f.lines} onChange={(e) => set({ lines: e.target.value })} /></div>
+      <div className="row3">
+        <div className="field"><label htmlFor="rs">Serves</label><input id="rs" inputMode="numeric" value={f.serves} onChange={(e) => set({ serves: e.target.value })} /></div>
+        <div className="field"><label htmlFor="rpre">Prep (min)</label><input id="rpre" inputMode="numeric" value={f.prep} onChange={(e) => set({ prep: e.target.value })} /></div>
+        <div className="field"><label htmlFor="rck">Cook (min)</label><input id="rck" inputMode="numeric" value={f.cook} onChange={(e) => set({ cook: e.target.value })} /></div>
+      </div>
+      <button className="switch" aria-pressed={f.makeAhead} onClick={() => set({ makeAhead: !f.makeAhead })}>
+        Prep it the day before<span className="track" aria-hidden="true"><span className="knob" /></span></button>
+      <div className="field"><label htmlFor="rl">Ingredients, one per line</label><textarea id="rl" rows={5} placeholder={"2 lb potatoes\n1/2 cup butter\n1 tsp salt"} value={f.lines} onChange={(e) => set({ lines: e.target.value })} /></div>
+      <div className="field"><label htmlFor="rd">Directions, one step per line</label><textarea id="rd" rows={5} placeholder={"Peel and cube the potatoes\nBoil 20 minutes, then drain and mash"} value={f.steps} onChange={(e) => set({ steps: e.target.value })} /></div>
       {err && <p className="err" role="alert">{err}</p>}
       <button className="btn" onClick={save}>Save & add to menu</button>
     </div></div>);

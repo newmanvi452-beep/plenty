@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_PARTY, DEFAULT_TG, LIB } from "./data";
 import { derive, parseLine, PlannerState, recTG, roastMin, turkeyLbs } from "./planner";
+import { buildCustomDish, parseRecipeText } from "./recipe";
+import { packaged } from "./packaging";
 import { clock, frac } from "./format";
 
 const ids = (a: string[]) => Object.fromEntries(a.map((i) => [i, true as const]));
 const base = (over: Partial<PlannerState> = {}): PlannerState => ({
-  mode: "tg", guests: 12, leftovers: false, partyStyle: "meal", dinnerTG: 16 * 60, partyTime: 19 * 60,
+  mode: "tg", adults: 12, kids: 0, leftovers: false, partyStyle: "meal", dinnerTG: 16 * 60, partyTime: 19 * 60,
   selTG: ids(DEFAULT_TG), selP: ids(DEFAULT_PARTY), custom: [], bringers: {}, extras: [], ...over,
 });
 
@@ -84,5 +86,86 @@ describe("format", () => {
     expect(frac(0.25)).toBe("¼");
     expect(clock(16 * 60)).toBe("4:00 PM");
     expect(clock(-30)).toBe("11:30 PM");
+  });
+});
+
+describe("adults and kids", () => {
+  it("kids count as half a portion", () => {
+    const adultsOnly = derive(base({ adults: 10, kids: 0 }));
+    const mixed = derive(base({ adults: 8, kids: 4 })); // 8 + 2 = 10 portions
+    const g = (d: ReturnType<typeof derive>) => d.grocery.flatMap((x) => x.items).map((i) => i.key + i.buy).join();
+    expect(g(mixed)).toBe(g(adultsOnly));
+    expect(g(derive(base({ adults: 10, kids: 10 })))).not.toBe(g(adultsOnly));
+  });
+});
+
+describe("store packages", () => {
+  it("panko: ¾ cup is one 8-oz box, 5 cups is three", () => {
+    expect(packaged("Panko breadcrumbs", "vol", 36)?.text).toBe("1 × 8-oz box");
+    expect(packaged("Panko breadcrumbs", "vol", 5 * 48)?.text).toBe("3 × 8-oz boxes");
+  });
+  it("shows the package and the recipe amount on the list", () => {
+    const d = derive(base());
+    const panko = d.grocery.flatMap((x) => x.items).find((i) => /panko/i.test(i.name))!;
+    expect(panko.buy).toBe("1 × 8-oz box");
+    expect(panko.need).toMatch(/cup/);
+  });
+  it("merges cups, tbsp and tsp of the same ingredient", () => {
+    // brie (2 tbsp honey) + cornbread (2 tbsp) + a custom dish using ½ cup: one line, 1 jar-sized bottle
+    const d = derive(base({ selTG: ids(["brie", "cornbread"]) }));
+    const honey = d.grocery.flatMap((x) => x.items).filter((i) => i.name === "Honey");
+    expect(honey).toHaveLength(1);
+    expect(honey[0].buy).toBe("1 × 12-oz bottle");
+    expect(honey[0].need).toBe("½ cup");
+  });
+  it("any spice by the spoonful is a jar", () => {
+    expect(packaged("Paprika", "vol", 3, "S")?.text).toBe("1 × jar");
+  });
+});
+
+describe("custom recipes with times", () => {
+  const base2 = { name: "Garlic Bread", cat: "bread", mode: "tg" as const, serves: 8, ingredients: ["1 loaf bread"], directions: ["Slice", "Bake"] };
+  it("puts prep and cook on the day-of timeline", () => {
+    const d = buildCustomDish({ ...base2, prep: 10, cook: 20, makeAhead: false });
+    expect(d.day).toEqual([[30, "Garlic Bread: start prepping (about 10 min)"], [20, "Garlic Bread: cook (about 20 min)"]]);
+    expect(d.directions).toEqual(["Slice", "Bake"]);
+  });
+  it("make-ahead moves prep to the day before", () => {
+    const d = buildCustomDish({ ...base2, prep: 10, cook: 20, makeAhead: true });
+    expect(d.ahead).toHaveLength(1);
+    expect(d.day).toEqual([[20, "Garlic Bread: cook (about 20 min)"]]);
+  });
+});
+
+describe("paste a recipe", () => {
+  const keys = ["apps", "mains", "sides", "sauces", "bread", "desserts", "drinks"];
+  it("sorts a recipe with headers", () => {
+    const r = parseRecipeText(`Grandma's Apple Pie Recipe
+Prep Time: 30 mins  Cook Time: 1 hr 15 mins
+Serves: 8
+
+Ingredients
+- 6 cups sliced apples
+• 3/4 cup sugar
+1 tsp cinnamon
+
+Directions
+1. Heat oven to 425°F.
+2. Toss apples with sugar and bake 50 minutes.`, keys);
+    expect(r).toMatchObject({ name: "Grandma's Apple Pie", serves: 8, prep: 30, cook: 75, cat: "desserts" });
+    expect(r.ingredients).toEqual(["6 cups sliced apples", "3/4 cup sugar", "1 tsp cinnamon"]);
+    expect(r.directions).toEqual(["Heat oven to 425°F.", "Toss apples with sugar and bake 50 minutes."]);
+  });
+  it("guesses without headers", () => {
+    const r = parseRecipeText(`Cheesy Potatoes
+2 lb potatoes
+1 cup shredded cheddar
+Slice the potatoes thin, layer with cheese, and bake until golden and bubbling.`, keys);
+    expect(r.name).toBe("Cheesy Potatoes");
+    expect(r.ingredients).toHaveLength(2);
+    expect(r.directions).toHaveLength(1);
+  });
+  it("a title that starts with a digit is still the title", () => {
+    expect(parseRecipeText("7-Layer Dip\n1 can beans", keys).name).toBe("7-Layer Dip");
   });
 });

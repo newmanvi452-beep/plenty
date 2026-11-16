@@ -15,7 +15,7 @@ const KEY = "plenty:v1";
 const ids = (a: string[]) => Object.fromEntries(a.map((i) => [i, true as const]));
 
 export const initialState = (): AppState => ({
-  mode: "tg", guests: 12, leftovers: false, partyStyle: "meal", dinnerTG: 16 * 60, partyTime: 19 * 60,
+  mode: "tg", adults: 12, kids: 0, leftovers: false, partyStyle: "meal", dinnerTG: 16 * 60, partyTime: 19 * 60,
   selTG: ids(DEFAULT_TG), selP: ids(DEFAULT_PARTY), custom: [], bringers: {}, extras: [],
   tab: "home", planView: "before", got: {}, done: {}, people: [],
 });
@@ -23,7 +23,13 @@ export const initialState = (): AppState => ({
 function load(): AppState {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...initialState(), ...JSON.parse(raw) };
+    if (raw) {
+      const saved = JSON.parse(raw);
+      // v1 stored a single "guests" count: treat those as adults.
+      if (saved.adults === undefined && typeof saved.guests === "number") saved.adults = saved.guests;
+      delete saved.guests;
+      return { ...initialState(), ...saved };
+    }
   } catch { /* storage unavailable or corrupt: start fresh */ }
   return initialState();
 }

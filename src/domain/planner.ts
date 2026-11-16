@@ -2,12 +2,17 @@
 // Ported from the Plenty prototype's renderVals().
 import { Dish, Ingredient, LIB, Mode, SECTIONS, Section, TG_CATS, PARTY_CATS, Category } from "./data";
 import { ceilTo, clock, frac, hm, qtyStr, round5, tgDay } from "./format";
+import { bestVolume, packaged, VOL } from "./packaging";
+
+/** A child eats about half as much as an adult. */
+export const KID_FACTOR = 0.5;
 
 export type PartyStyle = "apps" | "meal";
 
 export interface PlannerState {
   mode: Mode;
-  guests: number;
+  adults: number;
+  kids: number;
   leftovers: boolean;
   partyStyle: PartyStyle;
   dinnerTG: number; // minutes after midnight
@@ -129,7 +134,8 @@ export function cookText(q: number, u: string, name: string): string {
 // ---- Derived plan -------------------------------------------------------
 
 export interface Scale { mult: number; badge: string }
-export interface GroceryItem { key: string; qty: string; name: string; used: string[]; section: Section }
+/** `buy` is what to pick up; `need` is the recipe amount when it differs (e.g. buy "1 × 8-oz box", need "¾ cup"). */
+export interface GroceryItem { key: string; buy: string; need: string; name: string; used: string[]; section: Section }
 export interface PlanTask { id: string; text: string; tag?: string }
 export interface PlanDay { daysBefore: number; label: string; sub: string; tasks: PlanTask[] }
 export interface DayOfTask extends PlanTask { min: number; time: string }
@@ -155,7 +161,7 @@ export const selKeyOf = (mode: Mode) => (mode === "tg" ? "selTG" : "selP") as "s
 
 export function derive(s: PlannerState): Derived {
   const mode = s.mode, isTG = mode === "tg";
-  const g = s.guests, left = s.leftovers;
+  const g = s.adults + s.kids * KID_FACTOR, left = s.leftovers;
   const sel = s[selKeyOf(mode)];
   const cats = isTG ? TG_CATS : PARTY_CATS;
   const all = LIB.filter((r) => r.modes.includes(mode)).concat(s.custom.filter((c) => c.mode === mode));
@@ -183,24 +189,37 @@ export function derive(s: PlannerState): Derived {
     return { mult: b, badge };
   };
 
-  // Grocery list (only dishes the user is making themselves)
+  // Grocery list (only dishes the user is making themselves). Volumes merge in teaspoons.
   const map: Record<string, { name: string; u: string; sec: Section; q: number; used: string[] }> = {};
   const keys: string[] = [];
   mine.forEach((r) => {
     const sc = scale(r);
     r.ing.forEach((x) => {
-      const k = x[0] + "|" + x[2];
-      if (!map[k]) { map[k] = { name: x[0], u: x[2], sec: x[3], q: 0, used: [] }; keys.push(k); }
-      map[k].q += x[1] * sc.mult;
+      const vol = VOL[x[2]] !== undefined;
+      const k = x[0] + "|" + (vol ? "vol" : x[2]);
+      if (!map[k]) { map[k] = { name: x[0], u: vol ? "vol" : x[2], sec: x[3], q: 0, used: [] }; keys.push(k); }
+      map[k].q += x[1] * sc.mult * (vol ? VOL[x[2]] : 1);
       const sn = r.short || r.name;
       if (!map[k].used.includes(sn)) map[k].used.push(sn);
     });
   });
+  const toItem = (k: string): GroceryItem => {
+    const it = map[k]; const key = "g:" + mode + ":" + k;
+    const base = { key, name: it.name, used: it.used, section: it.sec };
+    if (it.u === "vol") {
+      const v = bestVolume(it.q), need = qtyStr(ceilTo(v.q, 0.25), v.u);
+      const p = packaged(it.name, "vol", it.q, it.sec);
+      return p ? { ...base, buy: p.text, need } : { ...base, buy: shopText({ name: it.name, u: v.u, q: v.q }), need: "" };
+    }
+    if (it.u === "oz") {
+      const p = packaged(it.name, "oz", it.q);
+      if (p) return { ...base, buy: p.text, need: qtyStr(Math.ceil(it.q - 1e-9), "oz") };
+    }
+    return { ...base, buy: shopText({ name: it.name, u: it.u, q: it.q }), need: "" };
+  };
   const grocery = SECTIONS.map(([sec, label]) => ({
     section: sec, label,
-    items: keys.filter((k) => map[k].sec === sec).sort().map((k) => ({
-      key: "g:" + mode + ":" + k, qty: shopText(map[k]), name: map[k].name, used: map[k].used, section: sec,
-    })),
+    items: keys.filter((k) => map[k].sec === sec).sort().map(toItem),
   })).filter((x) => x.items.length);
 
   // Cooking plan
