@@ -3,6 +3,11 @@
 import { SUPABASE_KEY as KEY, SUPABASE_URL as URL_, sharingEnabled as accountsEnabled } from "../share/client";
 
 export { accountsEnabled };
+/**
+ * How the sign-in email works. "link": the email has a sign-in link (Supabase's built-in emails). "code": the email has a
+ * 6-digit code (needs your own email provider and an edited template). Set VITE_AUTH_METHOD=code once that's done.
+ */
+export const AUTH_METHOD: "link" | "code" = import.meta.env.VITE_AUTH_METHOD === "code" ? "code" : "link";
 export interface Session { access_token: string; refresh_token: string; expires_at: number; user: { id: string; email: string } }
 export class AuthError extends Error { constructor(m: string, readonly fatal = false) { super(m); } }
 
@@ -40,10 +45,36 @@ const toSession = (r: TokenResponse): Session => ({
   user: { id: r.user.id, email: r.user.email ?? "" },
 });
 
-/** Email a one-time code. Creates the account the first time. */
-export const sendCode = (email: string) => call("/auth/v1/otp", { email: email.trim(), create_user: true });
+/** Email a sign-in link or code (depending on the email template). Creates the account the first time. */
+export const sendCode = (email: string) => call(`/auth/v1/otp?redirect_to=${encodeURIComponent(location.origin + location.pathname)}`, { email: email.trim(), create_user: true });
 export const verifyCode = async (email: string, code: string) => toSession(await call<TokenResponse>("/auth/v1/verify", { type: "email", email: email.trim(), token: code.replace(/\s+/g, "") }));
 export const signOutRemote = (s: Session) => call("/auth/v1/logout", {}, s.access_token).catch(() => undefined);
+
+const NOTICE = "plenty:auth:notice";
+/** A message left for the next screen (e.g. an expired sign-in link). */
+export const takeNotice = (): string => { try { const m = sessionStorage.getItem(NOTICE) || ""; sessionStorage.removeItem(NOTICE); return m; } catch { return ""; } };
+
+const jwtClaims = (jwt: string): { sub?: string; email?: string; exp?: number } | null => {
+  try { return JSON.parse(atob(jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); } catch { return null; }
+};
+/**
+ * When someone opens the sign-in link from their email they land on the site with the session in the address
+ * (#access_token=...). Pick it up, save it, and tidy the address bar. Must run before the app starts.
+ */
+export function consumeAuthFromUrl(): void {
+  if (!accountsEnabled) return;
+  const h = location.hash.startsWith("#") ? location.hash.slice(1) : "";
+  if (!h || h.startsWith("/")) return; // empty, or a guest link (#/s/...)
+  const p = new URLSearchParams(h);
+  const at = p.get("access_token"), rt = p.get("refresh_token");
+  if (at && rt) {
+    const c = jwtClaims(at);
+    if (c?.sub) saveSession({ access_token: at, refresh_token: rt, expires_at: Number(p.get("expires_at")) || c.exp || Math.floor(Date.now() / 1000) + 3600, user: { id: c.sub, email: c.email ?? "" } });
+  } else if (p.get("error")) {
+    try { sessionStorage.setItem(NOTICE, /expired|invalid/i.test(p.get("error_description") || "") ? "That sign-in link has expired or was already used. Ask for a new one." : "Sign-in didn’t work. Please try again."); } catch { /* ignore */ }
+  } else return;
+  history.replaceState(null, "", location.pathname + location.search);
+}
 
 /** A session whose token is good for at least another minute (refreshing if needed). */
 export async function freshSession(s: Session): Promise<Session> {

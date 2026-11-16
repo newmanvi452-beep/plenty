@@ -326,7 +326,7 @@ function AccountRow({ s, account, open }: { s: AppState; account: AccountApi; op
   const name = s.profile.name.trim();
   const text = account.session
     ? `Hi, ${name || account.email}${account.status === "syncing" ? " · saving…" : account.status === "error" ? " · couldn’t save" : " · ✓ saved"}`
-    : name ? `Hi, ${name}` : account.enabled ? "Sign in to save your plans on every device" : "Add your name";
+    : account.error ? account.error : name ? `Hi, ${name}` : account.enabled ? "Sign in to save your plans on every device" : "Add your name";
   return (
     <div className="row" style={{ padding: "0 4px", flex: "none" }}>
       <span className="sub" style={{ margin: 0, fontWeight: 800 }}>{text}</span>

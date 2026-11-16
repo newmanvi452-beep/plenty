@@ -34,3 +34,12 @@ How it is protected: the tables are locked, and the app only calls the functions
 Limits and to-dos: guest names are stored in your Supabase project (mention this in a privacy policy before charging users); there is no automatic cleanup of old events yet; one share link per mode.
 
 Develop without Supabase: `node supabase/mock-server.mjs` runs the same SQL in memory on http://localhost:54321, then start the app with `VITE_SUPABASE_URL=http://localhost:54321 VITE_SUPABASE_ANON_KEY=local npm run dev`. `npm test` also runs the SQL against a real Postgres (PGlite).
+
+## Accounts and sync
+Tap the profile circle (top right) to sign in. Your menus, recipes, checklists, notes and share links are saved to your account (one private row per user, protected by row level security in `supabase/schema.sql`) and sync across devices.
+- **Sign-in:** an emailed link (works with Supabase's built-in emails). The link must be opened on the device you want signed in. Supabase's Site URL and redirect allow-list are set to the live site.
+- **Email codes (recommended before launch):** the built-in sender can't be customised and is limited to a few emails per hour for the whole project. Add your own email provider under Authentication > Emails > SMTP Settings (Resend, Postmark, SES...), edit the "Magic link or OTP" template to include `{{ .Token }}`, then set `VITE_AUTH_METHOD=code` and rebuild. Codes also work inside the installed (home screen) app, where links open in Safari instead.
+- **Sign in with Apple / Google:** not set up. Apple needs an Apple Developer membership. When ready, enable the provider in Supabase (Authentication > Sign In / Providers) and add a button that calls `/auth/v1/authorize?provider=apple`.
+- **How sync decides:** whoever saved last wins, so deletions carry across devices. The first time a device signs in to an account it already has data for, both sides are combined so nothing is lost. Signing out clears the device (your data stays in the account).
+- **Still to do before charging:** delete the login itself (today "Delete my saved data" erases the saved copy but not the account), a privacy policy, and Apple's in-app account deletion rule if you ship through the App Store.
+- **Local testing:** `node supabase/mock-server.mjs` also emulates sign-in (it prints the sign-in link and code in its console).

@@ -25,13 +25,16 @@ const send = (res, code, body) => {
   res.end(body === undefined ? undefined : JSON.stringify(body));
 };
 const uuidFor = (email) => { const h = createHash("md5").update(email.toLowerCase()).digest("hex"); return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`; };
+const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
 const tokens = (uid, email) => {
   const expires_at = Math.floor(Date.now() / 1000) + 3600;
-  return { access_token: `mock.${uid}.${expires_at}`, refresh_token: `refresh.${uid}.${email}`, token_type: "bearer", expires_in: 3600, expires_at, user: { id: uid, email } };
+  // Looks like a real JWT: header.payload.signature (the signature is not checked here)
+  return { access_token: `${b64({ alg: "none", typ: "JWT" })}.${b64({ sub: uid, email, exp: expires_at })}.mock`, refresh_token: `refresh.${uid}.${email}`, token_type: "bearer", expires_in: 3600, expires_at, user: { id: uid, email } };
 };
 const userOf = (req) => {
-  const m = /^Bearer mock\.([0-9a-f-]{36})\.(\d+)$/.exec(req.headers.authorization || "");
-  return m && Number(m[2]) > Date.now() / 1000 ? m[1] : null;
+  const m = /^Bearer [^.]+\.([^.]+)\.mock$/.exec(req.headers.authorization || "");
+  if (!m) return null;
+  try { const c = JSON.parse(Buffer.from(m[1], "base64url").toString()); return /^[0-9a-f-]{36}$/.test(c.sub) && c.exp > Date.now() / 1000 ? c.sub : null; } catch { return null; }
 };
 
 async function asRole(role, uid, fn) {
@@ -48,7 +51,15 @@ createServer(async (req, res) => {
   const url = req.url || "";
   try {
     // ---- sign-in ----
-    if (url === "/auth/v1/otp") { console.log(`[mock] sign-in code for ${body.email}: ${CODE}`); return send(res, 200, {}); }
+    if (url.startsWith("/auth/v1/otp")) {
+      // Emulates the email: prints both a code and the sign-in link Supabase would send.
+      const uid = uuidFor(body.email);
+      await db.query("insert into auth.users (id, email) values ($1, $2) on conflict do nothing", [uid, body.email]);
+      const t = tokens(uid, body.email), back = new URL(url, "http://x").searchParams.get("redirect_to") || "http://localhost:5175/";
+      console.log(`[mock] sign-in code for ${body.email}: ${CODE}`);
+      console.log(`[mock] sign-in link: ${back}#access_token=${t.access_token}&expires_at=${t.expires_at}&expires_in=3600&refresh_token=${t.refresh_token}&token_type=bearer&type=magiclink`);
+      return send(res, 200, {});
+    }
     if (url === "/auth/v1/verify") {
       if (String(body.token) !== CODE) return send(res, 400, { code: 400, error_code: "otp_expired", msg: "Token has expired or is invalid" });
       const uid = uuidFor(body.email);

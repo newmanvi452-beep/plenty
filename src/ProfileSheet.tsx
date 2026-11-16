@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AccountApi } from "./sync/useAccount";
+import { AUTH_METHOD } from "./sync/auth";
 import { AppState } from "./store";
 
 type Patch = (p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -27,12 +28,17 @@ export default function ProfileSheet({ account, s, patch, close }: { account: Ac
       {account.enabled && !signedIn && (<>
         <section className="card" aria-label="Sign in" style={{ gap: 10 }}>
           <div><h2 style={{ fontSize: 18 }}>Save your plans</h2>
-            <p className="sub">Sign in and your menus, recipes, checklists and notes are saved to your account and follow you to every device. No password: we email you a code.</p></div>
+            <p className="sub">Sign in and your menus, recipes, checklists and notes are saved to your account and follow you to every device. No password: we email you a {AUTH_METHOD === "code" ? "code" : "sign-in link"}.</p></div>
           {step === "email" ? (<>
             <div className="field"><label htmlFor="acct-email">Email</label>
               <input id="acct-email" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" placeholder="you@example.com" value={email}
                 onChange={(e) => { setEmail(e.target.value); setErr(""); }} onKeyDown={(e) => { if (e.key === "Enter" && email.trim()) send(); }} /></div>
-            <button className="btn" disabled={busy || !/.+@.+\..+/.test(email.trim())} onClick={send}>{busy ? "Sending…" : "Email me a code"}</button></>
+            <button className="btn" disabled={busy || !/.+@.+\..+/.test(email.trim())} onClick={send}>{busy ? "Sending…" : AUTH_METHOD === "code" ? "Email me a code" : "Email me a sign-in link"}</button></>
+          ) : AUTH_METHOD === "link" ? (<>
+            <p className="sub" style={{ margin: 0 }} role="status">We emailed a sign-in link to <b>{email.trim()}</b>. Open it on this device to finish signing in. It can take a minute, and may land in spam.</p>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="chip" disabled={busy || cool > 0} onClick={send}>{cool > 0 ? `Resend in ${cool}s` : "Resend link"}</button>
+              <button className="chip" onClick={() => { setStep("email"); setErr(""); }}>Use a different email</button></div></>
           ) : (<>
             <p className="sub" style={{ margin: 0 }} role="status">We emailed a code to <b>{email.trim()}</b>. It can take a minute.</p>
             <div className="field"><label htmlFor="acct-code">Code</label>
@@ -42,7 +48,7 @@ export default function ProfileSheet({ account, s, patch, close }: { account: Ac
             <div className="row" style={{ gap: 8 }}>
               <button className="chip" disabled={busy || cool > 0} onClick={send}>{cool > 0 ? `Resend in ${cool}s` : "Resend code"}</button>
               <button className="chip" onClick={() => { setStep("email"); setErr(""); }}>Use a different email</button></div></>)}
-          {err && <p className="err" role="alert">{err}</p>}
+          {(err || account.error) && <p className="err" role="alert">{err || account.error}</p>}
         </section></>)}
 
       {account.enabled && signedIn && (<section className="card" aria-label="Account" style={{ gap: 10 }}>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fromCloud, mergeStates, toCloud } from "../domain/merge";
 import { AppState, initialState } from "../store";
-import { accountsEnabled, AuthError, freshSession, loadSession, saveSession, sendCode, Session, signOutRemote, verifyCode } from "./auth";
+import { accountsEnabled, AuthError, freshSession, loadSession, saveSession, sendCode, Session, signOutRemote, takeNotice, verifyCode } from "./auth";
 import { CloudError, deleteCloud, pullCloud, pushCloud } from "./cloud";
 
 const META = "plenty:sync:v1"; // which account this device's data last synced with
@@ -14,7 +14,7 @@ export type SyncStatus = "idle" | "syncing" | "synced" | "error";
 /** Account + cloud sync: sign in with an emailed code, then keep this device and the account in step. */
 export function useAccount(state: AppState, replace: (s: AppState) => void) {
   const [session, setSession] = useState<Session | null>(() => (accountsEnabled ? loadSession() : null));
-  const [status, setStatus] = useState<SyncStatus>("idle"), [error, setError] = useState(""), [lastSynced, setLastSynced] = useState("");
+  const [status, setStatus] = useState<SyncStatus>("idle"), [error, setError] = useState(takeNotice), [lastSynced, setLastSynced] = useState("");
   const stateRef = useRef(state); stateRef.current = state;
   const sessionRef = useRef(session); sessionRef.current = session;
   const pushed = useRef<string | null>(null); // the `modified` value that matches the cloud copy
