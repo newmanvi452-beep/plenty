@@ -9,12 +9,17 @@ export const sharingEnabled = !!(URL_ && KEY);
 
 export class ShareError extends Error {}
 
+/** New-style keys (sb_publishable_...) go in `apikey` only; old-style keys are JWTs and also go in Authorization. */
+const authHeaders = (): Record<string, string> => ({
+  apikey: KEY!, "Content-Type": "application/json", ...(KEY!.startsWith("eyJ") ? { Authorization: `Bearer ${KEY}` } : {}),
+});
+
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   if (!sharingEnabled) throw new ShareError("Sharing isn’t set up yet.");
   let res: Response;
   try {
     res = await fetch(`${URL_}/rest/v1/rpc/${fn}`, {
-      method: "POST", headers: { apikey: KEY!, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" }, body: JSON.stringify(args),
+      method: "POST", headers: authHeaders(), body: JSON.stringify(args),
     });
   } catch { throw new ShareError("Can’t reach the sharing service. Check your connection."); }
   const text = await res.text();
