@@ -90,3 +90,5 @@ input, textarea, select { font-size: max(16px, 1em); }
 /* No elastic bounce that exposes blank space under the app; no double-tap zoom delay on buttons. */
 html, body { overscroll-behavior: none; }
 button { touch-action: manipulation; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill2 { padding: 3px 10px; border-radius: 999px; background: var(--soft); font-size: 13px; font-weight: 700; }

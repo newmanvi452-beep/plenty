@@ -3,7 +3,7 @@ import { fmtDate, parseISO } from "../domain/format";
 import { cookText, Derived } from "../domain/planner";
 import { applyClaims, buildSnapshot, ClaimState } from "../domain/sharing";
 import { AppState } from "../store";
-import { createShare, deleteShare, EventFields, getShare, sharingEnabled, ShareError, shareUrl, updateShare } from "./client";
+import { createShare, deleteShare, EventFields, getShare, sharingEnabled, ShareError, shareUrl, unclaim, updateShare } from "./client";
 
 type Patch = (p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 const msg = (e: unknown) => (e instanceof ShareError ? e.message : "Something went wrong. Please try again.");
@@ -17,8 +17,8 @@ export function useShare(s: AppState, d: Derived, patch: Patch) {
   const fields: EventFields = useMemo(() => ({
     title: isTG ? "Thanksgiving dinner" : "Party",
     date: parseISO(date) ? date : null, serveMin: isTG ? s.dinnerTG : s.partyTime, adults: s.adults, kids: s.kids,
-    snapshot: buildSnapshot(d, cookText),
-  }), [d, isTG, date, s.dinnerTG, s.partyTime, s.adults, s.kids]);
+    snapshot: buildSnapshot(d, cookText, s.profile.name.trim() || undefined),
+  }), [d, isTG, date, s.dinnerTG, s.partyTime, s.adults, s.kids, s.profile.name]);
   const sig = JSON.stringify(fields);
   const pushed = useRef("");
 
@@ -60,6 +60,18 @@ export function useShare(s: AppState, d: Derived, patch: Patch) {
       patch((st) => ({ shares: { ...st.shares, [mode]: { slug, token } } }));
     } catch (e) { setError(msg(e)); } finally { setBusy(false); }
   };
+  /** Host removes a guest's sign-up (a dish or an extra). The next sync clears it from the plan. */
+  const removeClaim = async (t: { claimId?: string; dishId?: string }) => {
+    if (!share) return;
+    setError("");
+    try {
+      let id = t.claimId;
+      if (!id) id = (await getShare(share.slug))?.claims.find((c) => c.dish_id === t.dishId)?.id;
+      if (id) await unclaim(share.slug, id, { editToken: share.token });
+      const ev = await getShare(share.slug);
+      if (ev) { setClaimCount(ev.claims.length); patch((st) => applyClaims(st as ClaimState, mode, ev.snapshot.dishes.map((x) => x.id), ev.claims)); }
+    } catch (e) { setError(msg(e)); }
+  };
   const stop = async () => {
     if (!share || !window.confirm("Stop sharing? The link will stop working and guests’ sign-ups are deleted. Dishes they claimed stay assigned in your plan.")) return;
     setBusy(true); setError("");
@@ -72,6 +84,6 @@ export function useShare(s: AppState, d: Derived, patch: Patch) {
       setClaimCount(0); setStatus("idle");
     } catch (e) { setError(msg(e)); } finally { setBusy(false); }
   };
-  return { enabled: sharingEnabled, share, url: share ? shareUrl(share.slug) : "", busy, error, status, claimCount, create, stop, when: parseISO(date) ? fmtDate(parseISO(date)!) : "" };
+  return { enabled: sharingEnabled, share, url: share ? shareUrl(share.slug) : "", busy, error, status, claimCount, create, stop, removeClaim, when: parseISO(date) ? fmtDate(parseISO(date)!) : "" };
 }
 export type ShareApi = ReturnType<typeof useShare>;

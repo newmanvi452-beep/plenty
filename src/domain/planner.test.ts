@@ -326,3 +326,18 @@ describe("snapshot", () => {
     expect(JSON.stringify(snap)).not.toMatch(/edit|token/i);
   });
 });
+
+describe("your own extras and profile", () => {
+  it("an extra with no name is yours, not someone else's", () => {
+    const d = derive(base({ extras: [{ id: "a", who: "", what: "napkins", mode: "tg" }, { id: "b", who: "Aunt May", what: "ice", mode: "tg" }, { id: "c", who: "", what: "cups", mode: "party" }] }));
+    expect(d.mineExtras).toEqual([{ id: "a", what: "napkins" }]);
+    expect(Object.keys(d.bringing)).toEqual(["Aunt May"]);
+    expect(d.planDays.flatMap((p) => p.tasks).some((t) => /Check in with $/.test(t.text) || /Check in with :/.test(t.text))).toBe(false);
+  });
+  it("shared menu carries the host's name only when set", async () => {
+    const { buildSnapshot } = await import("./sharing");
+    const { cookText } = await import("./planner");
+    expect(buildSnapshot(derive(base()), cookText).host).toBeUndefined();
+    expect(buildSnapshot(derive(base()), cookText, "Vi").host).toBe("Vi");
+  });
+});

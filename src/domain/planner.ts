@@ -160,6 +160,8 @@ export interface Derived {
   turkey: { headline: string; thaw: string; roast: string; twoBirds: boolean } | null;
   base: Date | null;
   dayLabel: (n: number) => string;
+  /** extras with no name: things you are bringing yourself (napkins, ice, ...) */
+  mineExtras: { id: string; what: string }[];
   bringing: Record<string, { text: string; short: string; dishId?: string; extraId?: string }[]>;
 }
 
@@ -297,7 +299,11 @@ export function derive(s: PlannerState): Derived {
     const b = bringerOf(r);
     if (b) addBring(b, { text: r.name + " · " + scale(r).badge, short: r.short || r.name, dishId: r.id });
   });
-  s.extras.filter((e) => e.mode === mode).forEach((e) => addBring(e.who, { text: e.what, short: e.what, extraId: e.id }));
+  const mineExtras: { id: string; what: string }[] = [];
+  s.extras.filter((e) => e.mode === mode).forEach((e) => {
+    if (e.who) addBring(e.who, { text: e.what, short: e.what, extraId: e.id });
+    else mineExtras.push({ id: e.id, what: e.what });
+  });
   Object.keys(bringing).forEach((w) => addA(isTG ? 3 : 2, "bring-" + w, "Check in with " + w + ": " + bringing[w].map((x) => x.short).join(", ")));
 
   const planDays = Object.keys(aheadMap).map(Number).sort((a, b) => b - a).map((d) => ({
@@ -308,5 +314,5 @@ export function derive(s: PlannerState): Derived {
   }));
   const dayOf = dayOfRaw.sort((a, b) => b.min - a.min).map((t) => ({ ...t, time: clock(round5(serveTime - t.min)) }));
 
-  return { cats, all, chosen, mine, counts, rec, scale, bringerOf, grocery, planDays, dayOf, ovenNote, turkey, bringing, base, dayLabel };
+  return { cats, all, chosen, mine, counts, rec, scale, bringerOf, grocery, planDays, dayOf, ovenNote, turkey, mineExtras, bringing, base, dayLabel };
 }

@@ -17,6 +17,8 @@ export interface AppState extends PlannerState {
   eventNotes: Record<string, string>;
   /** one share link per planner mode; `token` is the owner's secret and never leaves this device */
   shares: Partial<Record<Mode, { slug: string; token: string }>>;
+  /** who you are: shown as the host on shared menus and on your own dishes in the overview */
+  profile: { name: string };
   claimSync: Record<string, string>;
 }
 
@@ -27,7 +29,7 @@ export const initialState = (): AppState => ({
   mode: "tg", adults: 12, kids: 0, leftovers: false, partyStyle: "meal", dinnerTG: 16 * 60, partyTime: 19 * 60,
   tgDate: isoDate(nextThanksgiving(new Date())), partyDate: "", hidden: {},
   selTG: ids(DEFAULT_TG), selP: ids(DEFAULT_PARTY), custom: [], bringers: {}, extras: [],
-  tab: "home", planView: "before", got: {}, done: {}, people: [], reviews: [], eventNotes: {}, shares: {}, claimSync: {},
+  tab: "home", planView: "before", got: {}, done: {}, people: [], reviews: [], eventNotes: {}, shares: {}, claimSync: {}, profile: { name: "" },
 });
 
 function load(): AppState {

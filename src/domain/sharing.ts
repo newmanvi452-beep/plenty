@@ -5,7 +5,7 @@ export interface SharedDish {
   id: string; name: string; cat: string; catLabel: string; meta: string; badge: string;
   ing: { q: string; name: string }[]; directions?: string[];
 }
-export interface Snapshot { dishes: SharedDish[] }
+export interface Snapshot { dishes: SharedDish[]; /** the host's name, if they set one in their profile */ host?: string }
 export interface Claim { id: string; dish_id: string | null; name: string; what: string | null }
 export interface SharedEvent {
   slug: string; mode: "tg" | "party"; title: string; event_date: string | null; serve_min: number | null;
@@ -13,8 +13,9 @@ export interface SharedEvent {
 }
 
 /** The menu as guests see it: dishes the owner picked, with amounts scaled for this guest list. */
-export function buildSnapshot(d: Derived, cookText: (q: number, u: string, name: string) => string): Snapshot {
+export function buildSnapshot(d: Derived, cookText: (q: number, u: string, name: string) => string, host?: string): Snapshot {
   return {
+    ...(host ? { host } : {}),
     dishes: d.chosen.map((r) => {
       const sc = d.scale(r);
       return {

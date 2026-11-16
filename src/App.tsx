@@ -16,6 +16,9 @@ const toneOf = (rec: number, picked: number) =>
   : picked < rec ? { t: `Add ${rec - picked} more`, c: "need" }
   : { t: `+${picked - rec} extra`, c: "" };
 const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} hr${m % 60 ? " " + (m % 60) + " min" : ""}` : `${m} min`);
+const meLabel = (name: string) => (name.trim() ? `${name.trim()} (you)` : "You");
+const meInitial = (name: string) => (name.trim() ? name.trim()[0].toUpperCase() : "Y");
+const isMe = (who: string, name: string) => !!name.trim() && who.trim().toLowerCase() === name.trim().toLowerCase();
 const toggleIn = (rec: Record<string, true>, k: string) => { const n = { ...rec }; if (n[k]) delete n[k]; else n[k] = true; return n; };
 
 function Completed({ count, children }: { count: number; children: React.ReactNode }) {
@@ -55,9 +58,9 @@ export default function App() {
       </header>
       <main>
         {s.tab === "home" && <Home s={s} d={d} patch={patch} share={share} />}
-        {s.tab === "menu" && <Menu s={s} d={d} patch={patch} open={setDetail} openForm={() => setShowForm(true)} />}
+        {s.tab === "menu" && <Menu s={s} d={d} patch={patch} share={share} open={setDetail} openForm={() => setShowForm(true)} />}
         {s.tab === "shop" && <Shop s={s} d={d} patch={patch} />}
-        {s.tab === "plan" && <Plan s={s} d={d} patch={patch} />}
+        {s.tab === "plan" && <Plan s={s} d={d} patch={patch} share={share} />}
         {s.tab === "notes" && <Notes s={s} d={d} patch={patch} goHome={() => go("home")} />}
       </main>
       <nav className="tabs" aria-label="Sections">
@@ -122,6 +125,7 @@ function Home({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch; s
   const note = isTG ? `For ${total} guests${pies ? ` · ${pies} ${pies === 1 ? "pie" : "pies"} total` : ""}`
     : s.partyStyle === "apps" ? "Plan on 10–12 bites per guest" : "A hearty main plus easy sides";
   return (<>
+    <ProfileCard s={s} patch={patch} />
     <div className="seg" role="group" aria-label="Planner mode">
       <button aria-pressed={isTG} onClick={() => patch({ mode: "tg" })}>Thanksgiving</button>
       <button aria-pressed={!isTG} onClick={() => patch({ mode: "party" })}>Party</button>
@@ -159,13 +163,14 @@ function Home({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch; s
   </>);
 }
 
-function Menu({ s, d, patch, open, openForm }: { s: AppState; d: Derived; patch: Patch; open: (id: string) => void; openForm: () => void }) {
+function Menu({ s, d, patch, share, open, openForm }: { s: AppState; d: Derived; patch: Patch; share: ShareApi; open: (id: string) => void; openForm: () => void }) {
   const key = selKeyOf(s.mode);
   const evKey = eventKey(s.mode, s.mode === "tg" ? s.tgDate : s.partyDate);
   const hiddenDishes = LIB.filter((r) => r.modes.includes(s.mode)).concat(s.custom.filter((c) => c.mode === s.mode)).filter((r) => s.hidden[r.id]);
   const toggle = (id: string) => patch((st) => ({ [key]: toggleIn(st[key], id) }) as Partial<AppState>);
   return (<>
     <button className="btn dashed" onClick={openForm}>+ Add your own recipe</button>
+    <Overview s={s} d={d} />
     {d.cats.map((c) => { const r = d.rec(c.key), t = toneOf(r, d.counts[c.key] || 0); return (
       <section key={c.key} aria-label={c.label}>
         <div className="catHead"><div><h2 style={{ fontSize: 20 }}>{c.label}</h2><p className="sub">{r ? `Pick ${r}${c.hint ? " · " + c.hint : ""}` : c.hint || "Optional for this kind of party"}</p></div><span className={"tag " + t.c}>{t.t}</span></div>
@@ -180,6 +185,7 @@ function Menu({ s, d, patch, open, openForm }: { s: AppState; d: Derived; patch:
             <button className="info" aria-label={`Details for ${x.name}`} onClick={() => open(x.id)}>›</button>
           </div>); })}</div>
       </section>); })}
+    <Extras s={s} d={d} patch={patch} share={share} />
     {!!hiddenDishes.length && <section className="card done"><details><summary>Hidden dishes · {hiddenDishes.length}</summary>
       {hiddenDishes.map((x) => <div className="row" key={x.id} style={{ padding: "6px 0" }}><span>{x.name}</span>
         <button className="chip" onClick={() => patch((st) => { const h = { ...st.hidden }; delete h[x.id]; return { hidden: h }; })}>Restore</button></div>)}
@@ -211,7 +217,7 @@ function Shop({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
   </>);
 }
 
-function Plan({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
+function Plan({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch; share: ShareApi }) {
   const isDone = (id: string) => !!s.done[s.mode + ":" + id];
   const flip = (id: string) => patch((st) => ({ done: toggleIn(st.done, st.mode + ":" + id) }));
   const row = (id: string, text: string, on: boolean, lead?: React.ReactNode, tag?: string) => (
@@ -237,7 +243,7 @@ function Plan({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
     <Completed count={before ? doneBefore.length : doneDay.length}>
       {before ? doneBefore.map((t) => row(t.id, t.text, true, undefined, t.day)) : doneDay.map((t) => row(t.id, t.text, true, <span className="time">{t.time}</span>, t.tag))}
     </Completed>
-    <Potluck s={s} d={d} patch={patch} />
+    <Potluck s={s} d={d} patch={patch} share={share} />
   </>);
 }
 
@@ -281,15 +287,100 @@ function Notes({ s, d, patch, goHome }: { s: AppState; d: Derived; patch: Patch;
   </>);
 }
 
-function Potluck({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
+/** Your name: shown as the host on shared menus and on your own dishes. */
+function ProfileCard({ s, patch }: { s: AppState; patch: Patch }) {
+  const name = s.profile.name.trim();
+  const [editing, setEditing] = useState(false), [draft, setDraft] = useState(name);
+  const save = () => { const n = draft.trim().replace(/\s+/g, " "); if (!n) return; patch({ profile: { name: n } }); setEditing(false); };
+  if (!editing) return (
+    <div className="row" style={{ padding: "0 4px", flex: "none" }}>
+      <span className="sub" style={{ margin: 0, fontWeight: 800 }}>{name ? `Hi, ${name}` : "Add your name so guests know who’s hosting"}</span>
+      <button className="chip" style={{ minHeight: 36 }} onClick={() => { setDraft(name); setEditing(true); }}>{name ? "Edit profile" : "Add name"}</button></div>);
+  return (
+    <section className="card" aria-label="Your profile"><div><h2>Your profile</h2>
+      <p className="sub">Shown as the host on shared menus, and on your own dishes under “Who’s bringing what”.</p></div>
+      <div className="field"><label htmlFor="profile-name">Your name</label>
+        <input id="profile-name" value={draft} maxLength={40} placeholder="Vi" onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") save(); }} /></div>
+      <div className="row" style={{ gap: 8 }}><button className="btn" style={{ flex: 1 }} disabled={!draft.trim()} onClick={save}>Save</button>
+        {name && <button className="btn ghost" onClick={() => setEditing(false)}>Cancel</button>}</div></section>);
+}
+
+/** Everything at a glance: what you're making, and what each person is bringing. */
+function Overview({ s, d }: { s: AppState; d: Derived }) {
+  const people = Object.keys(d.bringing);
+  const others = d.chosen.length - d.mine.length;
+  const me = meLabel(s.profile.name);
+  const row = (name: string, initial: string, items: string[], key: string) => (
+    <div className="row" key={key} style={{ alignItems: "flex-start", justifyContent: "flex-start" }}>
+      <span className="avatar">{initial}</span>
+      <div className="stack" style={{ flex: 1, gap: 6 }}><b>{name}</b>
+        <div className="pills">{items.map((t, i) => <span className="pill2" key={i}>{t}</span>)}</div></div>
+    </div>);
+  return (
+    <section className="card" aria-label="Overview">
+      <div><h2>Who’s bringing what</h2>
+        <p className="sub">{`You’re making ${d.mine.length} of ${d.chosen.length} dishes`}{others ? ` · ${others} covered by others` : ""}{s.shares[s.mode] ? " · guests can still claim any of yours" : ""}</p></div>
+      {row(me, meInitial(s.profile.name), [...d.mine.map((r) => r.short || r.name), ...d.mineExtras.map((x) => x.what)], "you")}
+      {people.map((w) => row(w, w[0].toUpperCase(), d.bringing[w].map((x) => x.short), w))}
+      {!people.length && <p className="sub" style={{ margin: 0 }}>Hand a dish to someone with the arrow on any dish, add an extra below, or share a link from Home so guests can sign up.</p>}
+    </section>);
+}
+
+/** Things that aren't dishes: napkins, ice, drinks. Guests' extras appear here too. */
+function Extras({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch; share: ShareApi }) {
+  const [what, setWhat] = useState(""), [who, setWho] = useState("");
+  const list = s.extras.filter((e) => e.mode === s.mode);
+  const me = meLabel(s.profile.name);
+  const add = () => {
+    const t = what.trim(); if (!t) return;
+    const n = who.trim().replace(/\s+/g, " ");
+    patch((st) => {
+      const name = n && !isMe(n, st.profile.name) ? st.people.find((p) => p.toLowerCase() === n.toLowerCase()) || n : "";
+      return { extras: [...st.extras, { id: "x" + Date.now(), who: name, what: t, mode: st.mode }], people: name && !st.people.includes(name) ? [...st.people, name] : st.people };
+    });
+    setWhat(""); setWho("");
+  };
+  const remove = (e: AppState["extras"][number]) => {
+    if (e.id.startsWith("sc-") && share.share) share.removeClaim({ claimId: e.id.slice(3) });
+    else patch((st) => ({ extras: st.extras.filter((x) => x.id !== e.id) }));
+  };
+  void d;
+  return (
+    <section aria-label="Extras">
+      <div className="catHead"><div><h2 style={{ fontSize: 20 }}>Extras</h2><p className="sub">Napkins, ice, drinks, anything that isn’t a dish</p></div></div>
+      <div className="stack" style={{ gap: 8 }}>
+        {list.map((e) => <div key={e.id} className="dish on" style={{ alignItems: "center", padding: "10px 14px", gap: 10 }}>
+          <span className="stack" style={{ flex: 1, gap: 2 }}><b>{e.what}</b><span className="sub" style={{ margin: 0 }}>{e.who ? `${e.who} is bringing it` : `${me} ${s.profile.name.trim() ? "is" : "are"} bringing it`}</span></span>
+          <button className="chip" style={{ minHeight: 36, padding: "0 12px" }} aria-label={`Remove ${e.what}`} onClick={() => remove(e)}>✕</button></div>)}
+        {!list.length && <p className="sub" style={{ margin: 0 }}>Nothing yet.</p>}
+        <div className="card" style={{ gap: 8, padding: 14 }}>
+          <div className="field"><label htmlFor="ex-what">What</label><input id="ex-what" value={what} onChange={(e) => setWhat(e.target.value)} placeholder="Napkins" /></div>
+          <div className="field"><label htmlFor="ex-who">Who’s bringing it (blank = you)</label><input id="ex-who" value={who} onChange={(e) => setWho(e.target.value)} placeholder="Aunt May" /></div>
+          <button className="btn ghost" onClick={add} disabled={!what.trim()}>Add extra</button></div>
+      </div>
+    </section>);
+}
+
+function Potluck({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch; share: ShareApi }) {
   const [who, setWho] = useState(""), [what, setWhat] = useState(""), [err, setErr] = useState("");
   const names = Object.keys(d.bringing);
   const canon = (n: string) => { n = n.trim().replace(/\s+/g, " "); return s.people.find((p) => p.toLowerCase() === n.toLowerCase()) || n; };
   const add = () => {
     const w = canon(who), t = what.trim();
     if (!w || !t) { setErr("Add who’s bringing it and what it is."); return; }
-    patch((st) => ({ extras: [...st.extras, { id: "x" + Date.now(), who: w, what: t, mode: st.mode }], people: st.people.includes(w) ? st.people : [...st.people, w] }));
+    const mine = isMe(w, s.profile.name);
+    patch((st) => ({ extras: [...st.extras, { id: "x" + Date.now(), who: mine ? "" : w, what: t, mode: st.mode }], people: mine || st.people.includes(w) ? st.people : [...st.people, w] }));
     setWhat(""); setErr("");
+  };
+  /** Remove one item. If a guest signed up for it, the sign-up is removed at the source so it doesn't come back. */
+  const removeItem = (x: { dishId?: string; extraId?: string }, who: string) => {
+    const guestDish = x.dishId && share.share && s.claimSync[bringKey(s.mode, x.dishId)] === who;
+    const guestExtra = x.extraId && x.extraId.startsWith("sc-") && share.share;
+    if (guestDish) share.removeClaim({ dishId: x.dishId });
+    else if (guestExtra) share.removeClaim({ claimId: x.extraId!.slice(3) });
+    else patch((st) => x.dishId
+      ? { bringers: Object.fromEntries(Object.entries(st.bringers).filter(([k]) => k !== bringKey(st.mode, x.dishId!))) }
+      : { extras: st.extras.filter((e) => e.id !== x.extraId) });
   };
   return (
     <section className="card" aria-label="Who's bringing what">
@@ -298,10 +389,14 @@ function Potluck({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
         <span className="avatar">{w[0].toUpperCase()}</span>
         <div className="stack" style={{ flex: 1 }}><b>{w}</b>{d.bringing[w].map((x, j) => (
           <div key={j} className="row"><span style={{ fontSize: 14 }}>{x.text}</span>
-            <button className="chip" style={{ minHeight: 32, padding: "0 10px" }} aria-label={`Remove ${x.short}`} onClick={() => patch((st) => x.dishId
-              ? { bringers: Object.fromEntries(Object.entries(st.bringers).filter(([k]) => k !== bringKey(st.mode, x.dishId!))) }
-              : { extras: st.extras.filter((e) => e.id !== x.extraId) })}>✕</button></div>))}</div>
+            <button className="chip" style={{ minHeight: 32, padding: "0 10px" }} aria-label={`Remove ${x.short}`} onClick={() => removeItem(x, w)}>✕</button></div>))}</div>
       </div>))}
+      {!!d.mineExtras.length && <div className="row" style={{ alignItems: "flex-start", justifyContent: "flex-start" }}>
+        <span className="avatar">{meInitial(s.profile.name)}</span>
+        <div className="stack" style={{ flex: 1 }}><b>{meLabel(s.profile.name)}</b>{d.mineExtras.map((x) => (
+          <div key={x.id} className="row"><span style={{ fontSize: 14 }}>{x.what}</span>
+            <button className="chip" style={{ minHeight: 32, padding: "0 10px" }} aria-label={`Remove ${x.what}`} onClick={() => patch((st) => ({ extras: st.extras.filter((e) => e.id !== x.id) }))}>✕</button></div>))}</div>
+      </div>}
       <div className="field"><label htmlFor="exwho">Who</label><input id="exwho" value={who} onChange={(e) => { setWho(e.target.value); setErr(""); }} placeholder="Aunt May" /></div>
       <div className="field"><label htmlFor="exwhat">Bringing</label><input id="exwhat" value={what} onChange={(e) => { setWhat(e.target.value); setErr(""); }} placeholder="Wine, ice, paper plates…" /></div>
       {err && <p className="err" role="alert">{err}</p>}
@@ -354,7 +449,7 @@ function DetailSheet({ id, s, d, patch, close }: { id: string; s: AppState; d: D
           return <div key={x.id} className="pastnote"><b>{v ? `${v.emoji} ${v.label}` : "Note"}{dt ? ` · ${fmtDate(dt)} ${dt.getFullYear()}` : ""}</b>{x.note && <span>{x.note}</span>}</div>; })}</div></div>}
       <div className="stack" style={{ gap: 8 }}><span className="label">Who’s making it?</span>
         <div className="chips" style={{ flexWrap: "wrap" }}>
-          {[{ l: "Me", v: "" }, ...s.people.map((p) => ({ l: p, v: p }))].map((o) => <button key={o.l} className="chip" aria-pressed={cur === o.v} onClick={() => assign(o.v)}>{o.l}</button>)}</div>
+          {[{ l: s.profile.name.trim() ? `${s.profile.name.trim()} (me)` : "Me", v: "" }, ...s.people.map((p) => ({ l: p, v: p }))].map((o) => <button key={o.v || "me"} className="chip" aria-pressed={cur === o.v} onClick={() => assign(o.v)}>{o.l}</button>)}</div>
         <div className="row"><input className="num" style={{ flex: 1, minWidth: 0, textAlign: "left", padding: "0 12px", fontSize: 16 }} aria-label="Add a person" placeholder="Add a person…" value={name} onChange={(e) => setName(e.target.value)} />
           <button className="btn ghost" onClick={addNew}>Assign</button></div>
         {cur && <p className="sub" style={{ margin: 0 }}>{cur} is on it. This dish is off your grocery list and cooking plan, so send {cur} the amounts above.</p>}</div>

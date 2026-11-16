@@ -52,7 +52,7 @@ export default function GuestPage({ slug }: { slug: string }) {
         <svg width="40" height="40" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="28" fill="var(--soft)" /><path d="M17 41c0-13 9-22 25-24-1 15-10 24-25 24z" fill="var(--mid)" /><path d="M17 41l16-16" stroke="var(--deep)" strokeWidth="2.5" strokeLinecap="round" fill="none" /></svg>
         <div><h1>{ev.title}</h1><p>{date ? fmtDate(date) : "Date to be announced"}{ev.serve_min !== null ? ` · ${clock(ev.serve_min)}` : ""}</p></div></div></header>
       <main>
-        <section className="hero"><div><p className="kicker">You’re invited</p><h2>What can you bring?</h2></div>
+        <section className="hero"><div><p className="kicker">{ev.snapshot.host ? `${ev.snapshot.host} invited you` : "You’re invited"}</p><h2>What can you bring?</h2></div>
           <div className="field"><label htmlFor="guest-name">Your name</label>
             <input id="guest-name" value={guest.name} maxLength={40} placeholder="Aunt May" onChange={(e) => { setGuest({ ...guest, name: e.target.value }); setErr(""); }} /></div>
           <p className="sub" style={{ margin: 0 }}>Tap “I’ll bring this” on a dish. The host sees it right away.</p></section>
