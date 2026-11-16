@@ -19,6 +19,12 @@ const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} hr${m % 60 ? " "
 const meLabel = (name: string) => (name.trim() ? `${name.trim()} (you)` : "You");
 const meInitial = (name: string) => (name.trim() ? name.trim()[0].toUpperCase() : "Y");
 const isMe = (who: string, name: string) => !!name.trim() && who.trim().toLowerCase() === name.trim().toLowerCase();
+/** Take a dish out of every selection and hand-off (used when deleting or hiding it). */
+const forgetDish = (st: AppState, id: string): Partial<AppState> => {
+  const bringers = Object.fromEntries(Object.entries(st.bringers).filter(([k]) => k !== bringKey("tg", id) && k !== bringKey("party", id)));
+  const selTG = { ...st.selTG }, selP = { ...st.selP }; delete selTG[id]; delete selP[id];
+  return { bringers, selTG, selP };
+};
 const toggleIn = (rec: Record<string, true>, k: string) => { const n = { ...rec }; if (n[k]) delete n[k]; else n[k] = true; return n; };
 
 function Completed({ count, children }: { count: number; children: React.ReactNode }) {
@@ -166,6 +172,25 @@ function Home({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch; s
 function Menu({ s, d, patch, share, open, openForm }: { s: AppState; d: Derived; patch: Patch; share: ShareApi; open: (id: string) => void; openForm: () => void }) {
   const key = selKeyOf(s.mode);
   const evKey = eventKey(s.mode, s.mode === "tg" ? s.tgDate : s.partyDate);
+  const [undo, setUndo] = useState<{ text: string; run: () => void } | null>(null);
+  useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(null), 7000); return () => clearTimeout(t); }, [undo]);
+  /** Delete a dish from the list. Your own recipes are deleted for good (after a confirm); built-ins are hidden and can be restored. */
+  const removeFromList = (x: Dish) => {
+    if (x.custom) {
+      if (!window.confirm(`Delete “${x.name}”? This removes the recipe and its notes for good.`)) return;
+      patch((st) => ({ ...forgetDish(st, x.id), custom: st.custom.filter((c) => c.id !== x.id), reviews: st.reviews.filter((r) => r.dishId !== x.id) }));
+      return;
+    }
+    const was = { tg: !!s.selTG[x.id], p: !!s.selP[x.id], bTG: s.bringers[bringKey("tg", x.id)], bP: s.bringers[bringKey("party", x.id)] };
+    patch((st) => ({ ...forgetDish(st, x.id), hidden: { ...st.hidden, [x.id]: true } }));
+    setUndo({ text: `Removed “${x.name}”`, run: () => patch((st) => {
+      const hidden = { ...st.hidden }; delete hidden[x.id];
+      const bringers = { ...st.bringers };
+      if (was.bTG) bringers[bringKey("tg", x.id)] = was.bTG;
+      if (was.bP) bringers[bringKey("party", x.id)] = was.bP;
+      return { hidden, bringers, selTG: was.tg ? { ...st.selTG, [x.id]: true } : st.selTG, selP: was.p ? { ...st.selP, [x.id]: true } : st.selP };
+    }) });
+  };
   const hiddenDishes = LIB.filter((r) => r.modes.includes(s.mode)).concat(s.custom.filter((c) => c.mode === s.mode)).filter((r) => s.hidden[r.id]);
   const toggle = (id: string) => patch((st) => ({ [key]: toggleIn(st[key], id) }) as Partial<AppState>);
   return (<>
@@ -182,9 +207,11 @@ function Menu({ s, d, patch, share, open, openForm }: { s: AppState; d: Derived;
                 {on && <span className="badge">{d.scale(x).badge}</span>}{on && who && <span className="tag ok">{who} is bringing it</span>}
                 {(() => { const lv = latestFor(s.reviews, x.id, evKey); const v = VERDICTS.find((q) => q.key === lv?.verdict); return v ? <span className="tag">{v.emoji} {v.label} last time</span> : null; })()}</span>
             </button>
+            <button className="del" aria-label={`Remove ${x.name} from my list`} onClick={() => removeFromList(x)}>🗑</button>
             <button className="info" aria-label={`Details for ${x.name}`} onClick={() => open(x.id)}>›</button>
           </div>); })}</div>
       </section>); })}
+    {undo && <div className="toast" role="status"><span>{undo.text}</span><button onClick={() => { undo.run(); setUndo(null); }}>Undo</button></div>}
     <Extras s={s} d={d} patch={patch} share={share} />
     {!!hiddenDishes.length && <section className="card done"><details><summary>Hidden dishes · {hiddenDishes.length}</summary>
       {hiddenDishes.map((x) => <div className="row" key={x.id} style={{ padding: "6px 0" }}><span>{x.name}</span>
@@ -423,11 +450,7 @@ function DetailSheet({ id, s, d, patch, close }: { id: string; s: AppState; d: D
     ...[...r.day].sort((a, b) => b[0] - a[0]).map((a) => `${a[0] >= 0 ? fmtMin(a[0]) + " before serving" : fmtMin(-a[0]) + " after sitting down"}: ${a[1]}`),
   ];
   const past = s.reviews.filter((x) => x.dishId === r.id).sort((a, b) => b.updated.localeCompare(a.updated));
-  const forget = (st: AppState): Partial<AppState> => {
-    const bringers = Object.fromEntries(Object.entries(st.bringers).filter(([k]) => k !== bringKey("tg", r.id) && k !== bringKey("party", r.id)));
-    const selTG = { ...st.selTG }, selP = { ...st.selP }; delete selTG[r.id]; delete selP[r.id];
-    return { bringers, selTG, selP };
-  };
+  const forget = (st: AppState): Partial<AppState> => forgetDish(st, r.id);
   const remove = () => {
     if (r.custom) {
       if (!window.confirm(`Delete “${r.name}”? This removes the recipe and its notes for good.`)) return;
