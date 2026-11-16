@@ -50,6 +50,15 @@ const BULLET = /^\s*(?:[-•*▢☐□●◦▪]\s*|\d+[.)]\s+|step\s*\d+\s*[:.\
 const QTY_START = /^\s*(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[½¼¾⅓⅔])(?=\s|[½¼¾⅓⅔]|$)/;
 const META = /^(?:prep(?:aration)?|cook(?:ing)?|total|active)?\s*time\b|^(?:serves|servings|yield|makes|prep|cook|total)\b\s*[:\-]/i;
 
+/** One step per line, numbered "1. ", "2. " ... Re-numbers if the lines already have numbers. */
+export function numberSteps(text: string): string {
+  return text.split("\n").map((l) => l.replace(/^\s*(?:\d+[.)]|step\s*\d+[:.]?)\s*/i, "").trim()).filter(Boolean).map((l, i) => `${i + 1}. ${l}`).join("\n");
+}
+/** Inverse of numberSteps: plain step text, one per entry. */
+export function stepList(text: string): string[] {
+  return numberSteps(text).split("\n").filter(Boolean).map((l) => l.replace(/^\d+\.\s*/, ""));
+}
+
 export function parseDuration(s: string): number {
   let mins = 0;
   const h = s.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/i); if (h) mins += parseFloat(h[1]) * 60;
@@ -93,7 +102,14 @@ export function parseRecipeText(text: string, catKeys: string[]): ParsedRecipe {
     if (!clean) continue;
     if (mode === "pre" && !name && !QTY_START.test(clean) && clean.length < 80) { name = clean.replace(/\s*recipe\s*$/i, ""); continue; }
     if (mode === "ing") { if (!/:$/.test(clean)) ingredients.push(clean); continue; }
-    if (mode === "dir") { directions.push(clean); continue; }
+    if (mode === "dir") {
+      // A wrapped sentence (previous line has no end punctuation, or this one starts lowercase) continues the previous step.
+      const prev = directions[directions.length - 1];
+      const numbered = BULLET.test(line) && !/^[-•*▢☐□●◦▪]/.test(line.trim());
+      if (prev && !numbered && (!/[.!?:]["')]?$/.test(prev) || /^[a-z]/.test(clean))) directions[directions.length - 1] = prev + " " + clean;
+      else directions.push(clean);
+      continue;
+    }
     // No headers: guess by shape (short line that starts with an amount = ingredient; sentence = step)
     if (!hasIngHeader && QTY_START.test(line) && !/^\d+[.)]\s/.test(line) && clean.length < 90) ingredients.push(clean);
     else if (!hasDirHeader && clean.length > 40) directions.push(clean);

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Dish } from "./domain/data";
 import { clock, hourLabel, tgDay } from "./domain/format";
 import { bringKey, cookText, derive, KID_FACTOR, selKeyOf, Derived } from "./domain/planner";
-import { buildCustomDish, cleanOcr, parseRecipeText } from "./domain/recipe";
+import { buildCustomDish, cleanOcr, numberSteps, parseRecipeText, stepList } from "./domain/recipe";
 import { extractRecipeText } from "./domain/ocr";
 import { AppState, Tab, useAppState } from "./store";
 
@@ -122,6 +122,7 @@ function Menu({ s, d, patch, open, openForm }: { s: AppState; d: Derived; patch:
   const key = selKeyOf(s.mode);
   const toggle = (id: string) => patch((st) => ({ [key]: toggleIn(st[key], id) }) as Partial<AppState>);
   return (<>
+    <button className="btn dashed" onClick={openForm}>+ Add your own recipe</button>
     {d.cats.map((c) => { const r = d.rec(c.key), t = toneOf(r, d.counts[c.key] || 0); return (
       <section key={c.key} aria-label={c.label}>
         <div className="catHead"><div><h2 style={{ fontSize: 20 }}>{c.label}</h2><p className="sub">{r ? `Pick ${r}${c.hint ? " · " + c.hint : ""}` : c.hint || "Optional for this kind of party"}</p></div><span className={"tag " + t.c}>{t.t}</span></div>
@@ -135,7 +136,6 @@ function Menu({ s, d, patch, open, openForm }: { s: AppState; d: Derived; patch:
             <button className="info" aria-label={`Details for ${x.name}`} onClick={() => open(x.id)}>›</button>
           </div>); })}</div>
       </section>); })}
-    <button className="btn dashed" onClick={openForm}>+ Add your own recipe</button>
   </>);
 }
 
@@ -266,7 +266,7 @@ function FormSheet({ s, d, patch, close }: { s: AppState; d: Derived; patch: Pat
   const [busy, setBusy] = useState("");
   const sortText = (text: string) => {
     const r = parseRecipeText(cleanOcr(text), catKeys);
-    setF({ name: r.name, cat: r.cat, serves: String(r.serves ?? (f.serves || 8)), prep: r.prep ? String(r.prep) : "", cook: r.cook ? String(r.cook) : "", makeAhead: f.makeAhead, lines: r.ingredients.join("\n"), steps: r.directions.join("\n") });
+    setF({ name: r.name, cat: r.cat, serves: String(r.serves ?? (f.serves || 8)), prep: r.prep ? String(r.prep) : "", cook: r.cook ? String(r.cook) : "", makeAhead: f.makeAhead, lines: r.ingredients.join("\n"), steps: numberSteps(r.directions.join("\n")) });
     const missing = [!r.ingredients.length && "ingredients", !r.directions.length && "directions", !(r.prep || r.cook) && "prep/cook times"].filter(Boolean);
     setNote(missing.length ? `Sorted. I couldn’t find ${missing.join(", ")}, so please check below.` : "Sorted. Give it a quick look, then save.");
     setErr("");
@@ -289,7 +289,7 @@ function FormSheet({ s, d, patch, close }: { s: AppState; d: Derived; patch: Pat
     if (!name) return setErr("Give your recipe a name.");
     if (!lines.length) return setErr("Add at least one ingredient line.");
     if (!prep && !cook) return setErr("Add a prep or cook time so it can go on the timeline.");
-    const rec: Dish = buildCustomDish({ name, cat: f.cat, mode: s.mode, serves: parseInt(f.serves, 10) || 4, prep, cook, makeAhead: f.makeAhead, ingredients: lines, directions: f.steps.split("\n").map((x) => x.trim()).filter(Boolean) });
+    const rec: Dish = buildCustomDish({ name, cat: f.cat, mode: s.mode, serves: parseInt(f.serves, 10) || 4, prep, cook, makeAhead: f.makeAhead, ingredients: lines, directions: stepList(f.steps) });
     const key = selKeyOf(s.mode);
     patch((st) => ({ custom: [...st.custom, rec], [key]: { ...st[key], [rec.id]: true } }) as Partial<AppState>);
     close();
@@ -316,7 +316,7 @@ function FormSheet({ s, d, patch, close }: { s: AppState; d: Derived; patch: Pat
       <button className="switch" aria-pressed={f.makeAhead} onClick={() => set({ makeAhead: !f.makeAhead })}>
         Prep it the day before<span className="track" aria-hidden="true"><span className="knob" /></span></button>
       <div className="field"><label htmlFor="rl">Ingredients, one per line</label><textarea id="rl" rows={5} placeholder={"2 lb potatoes\n1/2 cup butter\n1 tsp salt"} value={f.lines} onChange={(e) => set({ lines: e.target.value })} /></div>
-      <div className="field"><label htmlFor="rd">Directions, one step per line</label><textarea id="rd" rows={5} placeholder={"Peel and cube the potatoes\nBoil 20 minutes, then drain and mash"} value={f.steps} onChange={(e) => set({ steps: e.target.value })} /></div>
+      <div className="field"><label htmlFor="rd">Directions, one step per line (numbered for you)</label><textarea id="rd" rows={5} placeholder={"1. Peel and cube the potatoes\n2. Boil 20 minutes, then drain and mash"} value={f.steps} onChange={(e) => set({ steps: e.target.value })} onBlur={() => setF((cur) => ({ ...cur, steps: numberSteps(cur.steps) }))} /></div>
       {err && <p className="err" role="alert">{err}</p>}
       <button className="btn" onClick={save}>Save & add to menu</button>
     </div></div>);

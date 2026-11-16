@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_PARTY, DEFAULT_TG, LIB } from "./data";
 import { derive, parseLine, PlannerState, recTG, roastMin, turkeyLbs } from "./planner";
-import { buildCustomDish, cleanOcr, parseRecipeText } from "./recipe";
+import { buildCustomDish, cleanOcr, numberSteps, parseRecipeText, stepList } from "./recipe";
 import { packaged } from "./packaging";
 import { clock, frac } from "./format";
 
@@ -184,5 +184,34 @@ describe("OCR cleanup", () => {
   });
   it("leaves real text alone", () => {
     expect(cleanOcr("2 cups flour\nBake 8 oz in 10 minutes")).toBe("2 cups flour\nBake 8 oz in 10 minutes");
+  });
+});
+
+describe("directions", () => {
+  const keys = ["apps", "sides"];
+  it("joins wrapped lines into one step", () => {
+    const r = parseRecipeText(`Cranberry Dip
+Ingredients
+1 cup ricotta
+Directions
+Prep the cranberries and rosemary.
+To assemble: pour the whipped ricotta in a
+shallow bowl. Top with generous amount of
+balsamic glaze, chopped cranberries.
+Serve with crackers`, keys);
+    expect(r.directions).toEqual([
+      "Prep the cranberries and rosemary.",
+      "To assemble: pour the whipped ricotta in a shallow bowl. Top with generous amount of balsamic glaze, chopped cranberries.",
+      "Serve with crackers",
+    ]);
+  });
+  it("keeps numbered steps separate even if they wrap", () => {
+    const r = parseRecipeText("Pie\nIngredients\n1 crust\nDirections\n1. Heat the oven\nto 425.\n2. Bake it", keys);
+    expect(r.directions).toEqual(["Heat the oven to 425.", "Bake it"]);
+  });
+  it("numbers and renumbers steps", () => {
+    expect(numberSteps("Slice\nBake")).toBe("1. Slice\n2. Bake");
+    expect(numberSteps("1. Slice\n\n3) Bake\nStep 4: Eat")).toBe("1. Slice\n2. Bake\n3. Eat");
+    expect(stepList("1. Slice\n2. Bake")).toEqual(["Slice", "Bake"]);
   });
 });
