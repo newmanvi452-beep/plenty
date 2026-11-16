@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DEFAULT_PARTY, DEFAULT_TG } from "./domain/data";
 import { PlannerState } from "./domain/planner";
 import { isoDate, nextThanksgiving, parseISO } from "./domain/format";
+import { isDeviceOnly } from "./domain/merge";
 import { Review } from "./domain/review";
 import { Mode } from "./domain/data";
 
@@ -20,6 +21,8 @@ export interface AppState extends PlannerState {
   /** who you are: shown as the host on shared menus and on your own dishes in the overview */
   profile: { name: string };
   claimSync: Record<string, string>;
+  /** when anything that syncs last changed (ISO); the newest copy wins when devices differ */
+  modified: string;
 }
 
 const KEY = "plenty:v1";
@@ -29,7 +32,7 @@ export const initialState = (): AppState => ({
   mode: "tg", adults: 12, kids: 0, leftovers: false, partyStyle: "meal", dinnerTG: 16 * 60, partyTime: 19 * 60,
   tgDate: isoDate(nextThanksgiving(new Date())), partyDate: "", hidden: {},
   selTG: ids(DEFAULT_TG), selP: ids(DEFAULT_PARTY), custom: [], bringers: {}, extras: [],
-  tab: "home", planView: "before", got: {}, done: {}, people: [], reviews: [], eventNotes: {}, shares: {}, claimSync: {}, profile: { name: "" },
+  tab: "home", planView: "before", got: {}, done: {}, people: [], reviews: [], eventNotes: {}, shares: {}, claimSync: {}, profile: { name: "" }, modified: "",
 });
 
 function load(): AppState {
@@ -60,6 +63,12 @@ export function useAppState() {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* ignore */ }
   }, [state]);
   const patch = useCallback((p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) =>
-    setState((s) => ({ ...s, ...(typeof p === "function" ? p(s) : p) })), []);
-  return [state, patch] as const;
+    setState((s) => {
+      const part = typeof p === "function" ? p(s) : p;
+      const syncs = Object.keys(part).some((k) => !isDeviceOnly(k) && k !== "modified");
+      return { ...s, ...part, ...(syncs ? { modified: new Date().toISOString() } : {}) };
+    }), []);
+  /** Swap in a whole state (from the account) without counting it as a local edit. */
+  const replace = useCallback((next: AppState) => setState(next), []);
+  return [state, patch, replace] as const;
 }

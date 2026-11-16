@@ -14,6 +14,11 @@ const get = async (slug: string) => (await q("select get_shared_event($1) as e",
 beforeAll(async () => {
   db = new PGlite();
   await db.exec("create role anon nologin; create role authenticated nologin; grant usage on schema public to anon, authenticated;");
+  // Minimal stand-in for Supabase's auth schema: auth.uid() reads the signed-in user from a setting, like PostgREST does.
+  await db.exec(`create schema auth;
+    create table auth.users (id uuid primary key);
+    create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+    grant usage on schema auth to anon, authenticated;`);
   await db.exec(readFileSync(new URL("../../supabase/schema.sql", import.meta.url), "utf8"));
 });
 
@@ -84,5 +89,40 @@ describe("shared menu backend", () => {
     await asAnon(() => q("select claim_dish($1,'pie',null,'Bob','bob-key-0123456789ab')", [slug]));
     await asAnon(() => q("select delete_shared_event($1,$2)", [slug, TOKEN]));
     expect((await q("select count(*)::int as n from claims c join shared_events e on e.id=c.event_id where e.slug=$1", [slug]))[0].n).toBe(0);
+  });
+});
+
+describe("accounts: one private row per user", () => {
+  const A = "11111111-1111-1111-1111-111111111111", B = "22222222-2222-2222-2222-222222222222";
+  const asUser = async <T,>(uid: string | null, fn: () => Promise<T>) => {
+    await db.exec(`set role ${uid ? "authenticated" : "anon"}`);
+    await db.exec(`select set_config('request.jwt.claim.sub', '${uid ?? ""}', false)`);
+    try { return await fn(); } finally { await db.exec("reset role"); }
+  };
+  beforeAll(async () => { await db.exec(`insert into auth.users values ('${A}'), ('${B}')`); });
+
+  it("a signed-in user can save and read their own data", async () => {
+    await asUser(A, () => q("insert into user_data (data) values ($1::jsonb)", [JSON.stringify({ hello: "A" })]));
+    expect((await asUser(A, () => q("select user_id, data from user_data")))).toEqual([{ user_id: A, data: { hello: "A" } }]);
+    await asUser(A, () => q("update user_data set data = $1::jsonb, updated_at = now()", [JSON.stringify({ hello: "A2" })]));
+    expect((await asUser(A, () => q("select data from user_data")))[0].data).toEqual({ hello: "A2" });
+  });
+  it("another user sees nothing and cannot change or delete it", async () => {
+    await asUser(B, () => q("insert into user_data (data) values ($1::jsonb)", [JSON.stringify({ hello: "B" })]));
+    expect((await asUser(B, () => q("select data from user_data"))).map((r) => r.data)).toEqual([{ hello: "B" }]);
+    await asUser(B, () => q("update user_data set data = '{\"hacked\":1}'::jsonb where user_id = $1", [A]));
+    await asUser(B, () => q("delete from user_data where user_id = $1", [A]));
+    expect((await asUser(A, () => q("select data from user_data")))[0].data).toEqual({ hello: "A2" });
+  });
+  it("cannot write a row under someone else's id", async () => {
+    await expect(asUser(B, () => q("insert into user_data (user_id, data) values ($1, '{}'::jsonb)", [A]))).rejects.toThrow(/row-level security|duplicate key/);
+  });
+  it("signed-out visitors get nothing", async () => {
+    await expect(asUser(null, () => q("select * from user_data"))).rejects.toThrow(/permission denied/);
+    await expect(asUser(null, () => q("insert into user_data (data) values ('{}'::jsonb)"))).rejects.toThrow(/permission denied/);
+  });
+  it("a user can delete their own data", async () => {
+    await asUser(A, () => q("delete from user_data"));
+    expect(await asUser(A, () => q("select * from user_data"))).toEqual([]);
   });
 });

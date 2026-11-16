@@ -141,3 +141,26 @@ grant execute on function public.delete_shared_event(text, text) to anon, authen
 grant execute on function public.get_shared_event(text) to anon, authenticated;
 grant execute on function public.claim_dish(text, text, text, text, text) to anon, authenticated;
 grant execute on function public.unclaim(text, uuid, text, text) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------------------------
+-- Accounts: each signed-in user gets one private row holding their whole Plenty state, so their
+-- menus, recipes, checklists and notes follow them across devices. Row level security means a
+-- user can only ever read or write their own row (auth.uid() comes from their signed-in token).
+-- ---------------------------------------------------------------------------------------------
+create table if not exists public.user_data (
+  user_id uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  data jsonb not null check (octet_length(data::text) < 2000000),
+  updated_at timestamptz not null default now()
+);
+alter table public.user_data enable row level security;
+revoke all on public.user_data from anon, authenticated;
+grant select, insert, update, delete on public.user_data to authenticated;
+
+drop policy if exists "own row: read" on public.user_data;
+drop policy if exists "own row: insert" on public.user_data;
+drop policy if exists "own row: update" on public.user_data;
+drop policy if exists "own row: delete" on public.user_data;
+create policy "own row: read" on public.user_data for select to authenticated using (auth.uid() = user_id);
+create policy "own row: insert" on public.user_data for insert to authenticated with check (auth.uid() = user_id);
+create policy "own row: update" on public.user_data for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own row: delete" on public.user_data for delete to authenticated using (auth.uid() = user_id);
