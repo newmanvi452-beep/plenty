@@ -93,7 +93,7 @@ function ShareCard({ share }: { share: ShareApi }) {
       <div><h2>Share with guests</h2>
         <p className="sub">{share.share ? "Anyone with this link can see the menu and amounts and sign up to bring a dish. Only you can change the menu." : "Send guests a link so they can see the menu and tell you what they’ll bring. Your notes stay private."}</p></div>
       {share.share ? <>
-        <input className="num" style={{ width: "100%", textAlign: "left", padding: "0 12px", fontSize: 14 }} readOnly aria-label="Share link" value={share.url} onFocus={(e) => e.target.select()} />
+        <input className="num" style={{ width: "100%", textAlign: "left", padding: "0 12px", fontSize: 16 }} readOnly aria-label="Share link" value={share.url} onFocus={(e) => e.target.select()} />
         <div className="row" style={{ gap: 8 }}>
           <button className="btn" style={{ flex: 1 }} onClick={copy}>{copied ? "Copied!" : "Copy link"}</button>
           {"share" in navigator && <button className="btn ghost" style={{ flex: 1 }} onClick={send}>Send…</button>}</div>

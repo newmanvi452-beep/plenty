@@ -85,3 +85,8 @@ textarea.note { width: 100%; border-radius: 14px; border: 1.5px solid #E3CDB1; b
 .pastnote { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 14px; background: #fff; border: 1.5px solid var(--line); font-size: 14px; margin-top: 6px; }
 .field input[type="date"] { min-height: 44px; }
 nav.tabs button { font-size: 11.5px; }
+/* iPhone Safari zooms into text fields smaller than 16px; keep every field at least that size. */
+input, textarea, select { font-size: max(16px, 1em); }
+/* No elastic bounce that exposes blank space under the app; no double-tap zoom delay on buttons. */
+html, body { overscroll-behavior: none; }
+button { touch-action: manipulation; }
