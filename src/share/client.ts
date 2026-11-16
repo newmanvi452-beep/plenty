@@ -6,6 +6,9 @@ const URL_ = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 /** False until you add the two settings; the app hides sharing and works as before. */
 export const sharingEnabled = !!(URL_ && KEY);
+/** Same project settings, reused by the sign-in and sync code. */
+export const SUPABASE_URL = URL_;
+export const SUPABASE_KEY = KEY;
 
 export class ShareError extends Error {}
 

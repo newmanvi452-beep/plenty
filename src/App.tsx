@@ -7,6 +7,8 @@ import { buildCustomDish, cleanOcr, numberSteps, parseRecipeText, stepList } fro
 import { extractRecipeText } from "./domain/ocr";
 import { AppState, Tab, useAppState } from "./store";
 import { ShareApi, useShare } from "./share/useShare";
+import ProfileSheet from "./ProfileSheet";
+import { AccountApi, useAccount } from "./sync/useAccount";
 
 type Patch = (p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 const Check = () => <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>;
@@ -33,7 +35,9 @@ function Completed({ count, children }: { count: number; children: React.ReactNo
 }
 
 export default function App() {
-  const [s, patch] = useAppState();
+  const [s, patch, replace] = useAppState();
+  const account = useAccount(s, replace);
+  const [showProfile, setShowProfile] = useState(false);
   const d = derive(s);
   const share = useShare(s, d, patch);
   const [detail, setDetail] = useState<string | null>(null);
@@ -60,10 +64,12 @@ export default function App() {
           <svg width="40" height="40" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="28" fill="var(--soft)" /><path d="M17 41c0-13 9-22 25-24-1 15-10 24-25 24z" fill="var(--mid)" /><path d="M17 41l16-16" stroke="var(--deep)" strokeWidth="2.5" strokeLinecap="round" fill="none" /></svg>
           <div><h1>{titles[s.tab][0]}</h1><p>{titles[s.tab][1]}</p></div>
         </div>
-        <span className="pill">{s.adults + s.kids} guests</span>
+        <div className="row" style={{ gap: 8, flex: "none" }}>
+          <button className="avatar-btn" aria-label="Your profile" onClick={() => setShowProfile(true)}>{(s.profile.name.trim() || account.email || "").charAt(0).toUpperCase() || "👤"}</button>
+          <span className="pill">{s.adults + s.kids} guests</span></div>
       </header>
       <main>
-        {s.tab === "home" && <Home s={s} d={d} patch={patch} share={share} />}
+        {s.tab === "home" && <Home s={s} d={d} patch={patch} share={share} account={account} openProfile={() => setShowProfile(true)} />}
         {s.tab === "menu" && <Menu s={s} d={d} patch={patch} share={share} open={setDetail} openForm={() => setShowForm(true)} />}
         {s.tab === "shop" && <Shop s={s} d={d} patch={patch} />}
         {s.tab === "plan" && <Plan s={s} d={d} patch={patch} share={share} />}
@@ -75,6 +81,7 @@ export default function App() {
         ))}
       </nav>
       {detail && <DetailSheet id={detail} s={s} d={d} patch={patch} close={() => setDetail(null)} />}
+      {showProfile && <ProfileSheet account={account} s={s} patch={patch} close={() => setShowProfile(false)} />}
       {showForm && <FormSheet s={s} d={d} patch={patch} close={() => setShowForm(false)} />}
     </div>
   );
@@ -113,7 +120,7 @@ function ShareCard({ share }: { share: ShareApi }) {
     </section>);
 }
 
-function Home({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch; share: ShareApi }) {
+function Home({ s, d, patch, share, account, openProfile }: { s: AppState; d: Derived; patch: Patch; share: ShareApi; account: AccountApi; openProfile: () => void }) {
   const isTG = s.mode === "tg";
   const times = isTG ? [12, 13, 14, 15, 16, 17, 18] : [12, 14, 17, 18, 19, 20];
   const serve = isTG ? s.dinnerTG : s.partyTime;
@@ -131,7 +138,7 @@ function Home({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch; s
   const note = isTG ? `For ${total} guests${pies ? ` · ${pies} ${pies === 1 ? "pie" : "pies"} total` : ""}`
     : s.partyStyle === "apps" ? "Plan on 10–12 bites per guest" : "A hearty main plus easy sides";
   return (<>
-    <ProfileCard s={s} patch={patch} />
+    <AccountRow s={s} account={account} open={openProfile} />
     <div className="seg" role="group" aria-label="Planner mode">
       <button aria-pressed={isTG} onClick={() => patch({ mode: "tg" })}>Thanksgiving</button>
       <button aria-pressed={!isTG} onClick={() => patch({ mode: "party" })}>Party</button>
@@ -314,22 +321,16 @@ function Notes({ s, d, patch, goHome }: { s: AppState; d: Derived; patch: Patch;
   </>);
 }
 
-/** Your name: shown as the host on shared menus and on your own dishes. */
-function ProfileCard({ s, patch }: { s: AppState; patch: Patch }) {
+/** Slim row at the top of Home: who you are and whether your plans are saved to your account. */
+function AccountRow({ s, account, open }: { s: AppState; account: AccountApi; open: () => void }) {
   const name = s.profile.name.trim();
-  const [editing, setEditing] = useState(false), [draft, setDraft] = useState(name);
-  const save = () => { const n = draft.trim().replace(/\s+/g, " "); if (!n) return; patch({ profile: { name: n } }); setEditing(false); };
-  if (!editing) return (
-    <div className="row" style={{ padding: "0 4px", flex: "none" }}>
-      <span className="sub" style={{ margin: 0, fontWeight: 800 }}>{name ? `Hi, ${name}` : "Add your name so guests know who’s hosting"}</span>
-      <button className="chip" style={{ minHeight: 36 }} onClick={() => { setDraft(name); setEditing(true); }}>{name ? "Edit profile" : "Add name"}</button></div>);
+  const text = account.session
+    ? `Hi, ${name || account.email}${account.status === "syncing" ? " · saving…" : account.status === "error" ? " · couldn’t save" : " · ✓ saved"}`
+    : name ? `Hi, ${name}` : account.enabled ? "Sign in to save your plans on every device" : "Add your name";
   return (
-    <section className="card" aria-label="Your profile"><div><h2>Your profile</h2>
-      <p className="sub">Shown as the host on shared menus, and on your own dishes under “Who’s bringing what”.</p></div>
-      <div className="field"><label htmlFor="profile-name">Your name</label>
-        <input id="profile-name" value={draft} maxLength={40} placeholder="Vi" onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") save(); }} /></div>
-      <div className="row" style={{ gap: 8 }}><button className="btn" style={{ flex: 1 }} disabled={!draft.trim()} onClick={save}>Save</button>
-        {name && <button className="btn ghost" onClick={() => setEditing(false)}>Cancel</button>}</div></section>);
+    <div className="row" style={{ padding: "0 4px", flex: "none" }}>
+      <span className="sub" style={{ margin: 0, fontWeight: 800 }}>{text}</span>
+      <button className="chip" style={{ minHeight: 36 }} onClick={open}>{account.session ? "Profile" : account.enabled ? "Sign in" : "Profile"}</button></div>);
 }
 
 /** Everything at a glance: what you're making, and what each person is bringing. */
