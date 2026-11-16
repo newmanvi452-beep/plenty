@@ -25,6 +25,21 @@ export function buildCustomDish(i: RecipeInput): Dish {
   };
 }
 
+// ---- OCR cleanup --------------------------------------------------------
+
+/** Fix the mistakes OCR makes most often in recipes. Safe to run on typed text too. */
+export function cleanOcr(text: string): string {
+  const UNITS = "cups?|tbsp|tsp|tablespoons?|teaspoons?|lbs?|pounds?|oz|ounces?|cans?|cloves?|sticks?|pinch|dash";
+  return text.replace(/\r/g, "").split("\n").map((line) => {
+    let l = line.replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/\s+/g, " ").trim();
+    l = l.replace(/^[«»]\s*/, "• ");
+    l = l.replace(new RegExp("^([•\\-*]\\s*)?[lI|]\\s+(?=(?:" + UNITS + ")\\b)", "i"), "$11 "); // "l cup" -> "1 cup"
+    l = l.replace(new RegExp("^([•\\-*]\\s*)?[lI|](?=\\/\\d)", "i"), "$11");                    // "l/2 cup" -> "1/2 cup"
+    l = l.replace(/(\d)\s*[Oo](?=\s|$)(?!\s*(?:z|unce))/g, "$10").replace(/\b[Oo](\d)/g, "0$1");  // 4O -> 40, O5 -> 05
+    return l;
+  }).join("\n");
+}
+
 // ---- Paste & sort -------------------------------------------------------
 
 export interface ParsedRecipe { name: string; serves?: number; prep?: number; cook?: number; ingredients: string[]; directions: string[]; cat: string }
@@ -45,6 +60,7 @@ export function parseDuration(s: string): number {
 export function guessCategory(name: string, keys: string[]): string {
   const n = name.toLowerCase();
   const rules: [RegExp, string][] = [
+    [/\b(stuffing|casserole|mashed|potatoes|salad|slaw|green beans|mac(?: &| and)? cheese|sprouts)\b/, "sides"],
     [/\b(pie|cake|cookie|brownie|crisp|cobbler|pudding|fudge|tart|cheesecake|bar|bars)\b/, "desserts"],
     [/\b(punch|cider|sangria|cocktail|lemonade|smoothie|latte|mocktail)\b/, "drinks"],
     [/\b(gravy|sauce|salsa|vinaigrette|dressing)\b/, "sauces"],

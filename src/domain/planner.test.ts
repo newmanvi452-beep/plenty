@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_PARTY, DEFAULT_TG, LIB } from "./data";
 import { derive, parseLine, PlannerState, recTG, roastMin, turkeyLbs } from "./planner";
-import { buildCustomDish, parseRecipeText } from "./recipe";
+import { buildCustomDish, cleanOcr, parseRecipeText } from "./recipe";
 import { packaged } from "./packaging";
 import { clock, frac } from "./format";
 
@@ -165,7 +165,24 @@ Slice the potatoes thin, layer with cheese, and bake until golden and bubbling.`
     expect(r.ingredients).toHaveLength(2);
     expect(r.directions).toHaveLength(1);
   });
+  it("stuffing made with cornbread is a side, not bread", () => {
+    expect(parseRecipeText("Mom's Cornbread Stuffing\n1 loaf cornbread", keys).cat).toBe("sides");
+    expect(parseRecipeText("Honey Cornbread\n1 cup cornmeal", keys).cat).toBe("bread");
+  });
   it("a title that starts with a digit is still the title", () => {
     expect(parseRecipeText("7-Layer Dip\n1 can beans", keys).name).toBe("7-Layer Dip");
+  });
+});
+
+describe("OCR cleanup", () => {
+  it("fixes common misreads", () => {
+    expect(cleanOcr("l cup sugar")).toBe("1 cup sugar");
+    expect(cleanOcr("• I tsp salt")).toBe("• 1 tsp salt");
+    expect(cleanOcr("l/2 cup butter")).toBe("1/2 cup butter");
+    expect(cleanOcr("Bake 4O minutes")).toBe("Bake 40 minutes");
+    expect(cleanOcr("Mom\u2019s Pie")).toBe("Mom's Pie");
+  });
+  it("leaves real text alone", () => {
+    expect(cleanOcr("2 cups flour\nBake 8 oz in 10 minutes")).toBe("2 cups flour\nBake 8 oz in 10 minutes");
   });
 });

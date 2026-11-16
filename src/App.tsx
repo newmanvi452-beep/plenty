@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Dish } from "./domain/data";
 import { clock, hourLabel, tgDay } from "./domain/format";
 import { bringKey, cookText, derive, KID_FACTOR, selKeyOf, Derived } from "./domain/planner";
-import { buildCustomDish, parseRecipeText } from "./domain/recipe";
+import { buildCustomDish, cleanOcr, parseRecipeText } from "./domain/recipe";
+import { extractRecipeText } from "./domain/ocr";
 import { AppState, Tab, useAppState } from "./store";
 
 type Patch = (p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -262,13 +263,25 @@ function FormSheet({ s, d, patch, close }: { s: AppState; d: Derived; patch: Pat
   const [f, setF] = useState({ name: "", cat: catKeys.includes("sides") ? "sides" : catKeys[0], serves: "8", prep: "", cook: "", makeAhead: false, lines: "", steps: "" });
   const [paste, setPaste] = useState(""), [err, setErr] = useState(""), [note, setNote] = useState("");
   const set = (p: Partial<typeof f>) => { setF({ ...f, ...p }); setErr(""); };
-  const sortOut = () => {
-    if (!paste.trim()) { setNote("Paste a recipe first."); return; }
-    const r = parseRecipeText(paste, catKeys);
+  const [busy, setBusy] = useState("");
+  const sortText = (text: string) => {
+    const r = parseRecipeText(cleanOcr(text), catKeys);
     setF({ name: r.name, cat: r.cat, serves: String(r.serves ?? (f.serves || 8)), prep: r.prep ? String(r.prep) : "", cook: r.cook ? String(r.cook) : "", makeAhead: f.makeAhead, lines: r.ingredients.join("\n"), steps: r.directions.join("\n") });
     const missing = [!r.ingredients.length && "ingredients", !r.directions.length && "directions", !(r.prep || r.cook) && "prep/cook times"].filter(Boolean);
     setNote(missing.length ? `Sorted. I couldn’t find ${missing.join(", ")}, so please check below.` : "Sorted. Give it a quick look, then save.");
     setErr("");
+  };
+  const sortOut = () => { if (!paste.trim()) { setNote("Paste a recipe first."); return; } sortText(paste); };
+  const fromPhoto = async (file: File | undefined) => {
+    if (!file) return;
+    setNote(""); setErr(""); setBusy("Reading the photo…");
+    try {
+      const text = await extractRecipeText(file, (pct, status) => setBusy(`${status === "recognizing text" ? "Reading the photo" : "Getting ready"}… ${pct}%`));
+      if (text.replace(/\s/g, "").length < 20) setNote("I couldn’t read much text in that photo. Try a sharper, straight-on picture, or paste the text.");
+      else { setPaste(text); sortText(text); setNote((n) => n + " (Read from your photo, so double-check amounts.)"); }
+    } catch {
+      setNote("Couldn’t read that photo. Check your connection (the reader downloads once), or paste the text instead.");
+    } finally { setBusy(""); }
   };
   const save = () => {
     const name = f.name.trim(), lines = f.lines.split("\n").map((x) => x.trim()).filter(Boolean);
@@ -286,7 +299,12 @@ function FormSheet({ s, d, patch, close }: { s: AppState; d: Derived; patch: Pat
       <div className="row"><h2>Add your own recipe</h2><button className="round" aria-label="Close" onClick={close}>✕</button></div>
       <div className="field"><label htmlFor="rp">Paste a whole recipe</label>
         <textarea id="rp" rows={4} placeholder="Paste the title, ingredients and directions here and tap Sort it out" value={paste} onChange={(e) => { setPaste(e.target.value); setNote(""); }} />
-        <button className="btn ghost" onClick={sortOut}>Sort it out</button>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn ghost" style={{ flex: 1 }} onClick={sortOut} disabled={!!busy}>Sort it out</button>
+          <label className="btn ghost photo" aria-disabled={!!busy}>Use a photo
+            <input type="file" accept="image/*" hidden disabled={!!busy} onChange={(e) => { fromPhoto(e.target.files?.[0]); e.target.value = ""; }} /></label>
+        </div>
+        {busy && <p className="sub" style={{ margin: 0 }} role="status">{busy}</p>}
         {note && <p className="sub" style={{ margin: 0 }} role="status">{note}</p>}</div>
       <div className="field"><label htmlFor="rn">Name</label><input id="rn" value={f.name} onChange={(e) => set({ name: e.target.value })} /></div>
       <div className="chips" style={{ flexWrap: "wrap" }}>{d.cats.map((c) => <button key={c.key} className="chip" aria-pressed={f.cat === c.key} onClick={() => set({ cat: c.key })}>{c.label}</button>)}</div>
