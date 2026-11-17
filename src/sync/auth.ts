@@ -7,7 +7,7 @@ export { accountsEnabled };
  * How the sign-in email works. "link": the email has a sign-in link (Supabase's built-in emails). "code": the email has a
  * 6-digit code (needs your own email provider and an edited template). Set VITE_AUTH_METHOD=code once that's done.
  */
-export const AUTH_METHOD: "link" | "code" = import.meta.env.VITE_AUTH_METHOD === "code" ? "code" : "link";
+export const AUTH_METHOD: "link" | "code" = import.meta.env.VITE_AUTH_METHOD === "link" ? "link" : "code";
 export interface Session { access_token: string; refresh_token: string; expires_at: number; user: { id: string; email: string } }
 export class AuthError extends Error { constructor(m: string, readonly fatal = false) { super(m); } }
 
