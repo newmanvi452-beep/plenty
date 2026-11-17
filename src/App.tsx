@@ -152,7 +152,7 @@ function Home({ s, d, patch, share, account, openProfile }: { s: AppState; d: De
         {s.kids > 0 && <p className="sub" style={{ margin: "4px 0 0" }}>{s.adults} adult{s.adults === 1 ? "" : "s"} + {s.kids} kid{s.kids === 1 ? "" : "s"} (kids count as {KID_FACTOR === 0.5 ? "half a portion" : "a smaller portion"})</p>}
         {countdown && <p className="sub" style={{ margin: "4px 0 0", fontWeight: 800 }}>{countdown}</p>}</div>
       {!isTG && <div className="field"><label htmlFor="pdate">When’s the party?</label>
-        <input id="pdate" type="date" value={s.partyDate} onChange={(e) => setPartyDate(e.target.value)} />
+        <div className="datebox"><input id="pdate" type="date" value={s.partyDate} onChange={(e) => setPartyDate(e.target.value)} />{!s.partyDate && <span className="dateph" aria-hidden="true">Pick a date</span>}</div>
         {!s.partyDate && <p className="sub" style={{ margin: 0 }}>Add the date to get dated reminders on your plan and a place for notes afterward.</p>}</div>}
       <Stepper id="adults" label="Adults" value={s.adults} min={1} onChange={(adults) => patch({ adults })} />
       <Stepper id="kids" label="Kids" value={s.kids} min={0} onChange={(kids) => patch({ kids })} />
