@@ -1,3 +1,4 @@
+import { Logo, Wordmark } from "./Logo";
 import { useEffect, useRef, useState } from "react";
 import { Dish, LIB } from "./domain/data";
 import { daysUntil, fmtDate, hourLabel, parseISO } from "./domain/format";
@@ -61,8 +62,8 @@ export default function App() {
     <div className="app">
       <header className="top">
         <div className="brand">
-          <svg width="40" height="40" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="28" fill="var(--soft)" /><path d="M17 41c0-13 9-22 25-24-1 15-10 24-25 24z" fill="var(--mid)" /><path d="M17 41l16-16" stroke="var(--deep)" strokeWidth="2.5" strokeLinecap="round" fill="none" /></svg>
-          <div><h1>{titles[s.tab][0]}</h1><p>{titles[s.tab][1]}</p></div>
+          <Logo size={40} />
+          <div><h1>{s.tab === "home" ? <Wordmark /> : titles[s.tab][0]}</h1><p>{titles[s.tab][1]}</p></div>
         </div>
         <div className="row" style={{ gap: 8, flex: "none" }}>
           <button className="avatar-btn" aria-label="Your profile" onClick={() => setShowProfile(true)}>{(s.profile.name.trim() || account.email || "").charAt(0).toUpperCase() || "👤"}</button>
