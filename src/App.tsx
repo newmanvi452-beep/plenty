@@ -62,13 +62,14 @@ export default function App() {
     <div className="app">
       <header className="top">
         <div className="brand">
-          <Logo size={40} />
-          <div><h1>{s.tab === "home" ? <Wordmark /> : titles[s.tab][0]}</h1><p>{titles[s.tab][1]}</p></div>
+          <Logo size={s.tab === "home" ? 48 : 40} />
+          <div><h1 className={s.tab === "home" ? "wm" : undefined}>{s.tab === "home" ? <Wordmark /> : titles[s.tab][0]}</h1>{s.tab !== "home" && <p>{titles[s.tab][1]}</p>}</div>
         </div>
         <div className="row" style={{ gap: 8, flex: "none" }}>
           <button className="avatar-btn" aria-label="Your profile" onClick={() => setShowProfile(true)}>{(s.profile.name.trim() || account.email || "").charAt(0).toUpperCase() || "👤"}</button>
-          <span className="pill">{s.adults + s.kids} guests</span></div>
+          {s.tab !== "home" && <span className="pill">{s.adults + s.kids} guests</span>}</div>
       </header>
+      {s.tab === "home" && <p className="tagline">{titles.home[1]}</p>}
       <main>
         {s.tab === "home" && <Home s={s} d={d} patch={patch} share={share} account={account} openProfile={() => setShowProfile(true)} />}
         {s.tab === "menu" && <Menu s={s} d={d} patch={patch} share={share} open={setDetail} openForm={() => setShowForm(true)} />}

@@ -99,3 +99,5 @@ button { touch-action: manipulation; }
 .swipe-act { position: absolute; inset: 0 0 3px 0; width: 100%; border: none; border-radius: 18px; background: #B3402A; color: #fff; font-weight: 800; font-size: 16px; text-align: right; padding: 0 26px 0 0; }
 .swipe-body { position: relative; touch-action: pan-y; }
 nav.tabs button svg { display: block; }
+header.top h1.wm { font-size: 36px; line-height: 1; letter-spacing: -0.5px; white-space: nowrap; }
+.tagline { margin: 0; padding: 0 20px 6px; font-size: 14px; color: var(--muted); flex: none; }
