@@ -1,7 +1,7 @@
 // Combining this device's data with what's saved in the account.
 //
 // Normal syncs: whoever saved last wins, so a deletion on one device really deletes everywhere.
-// First sync on a device that already has its own data (you used Plenty before signing in): keep
+// First sync on a device that already has its own data (you used Serves Twenty before signing in): keep
 // everything from both sides so nothing you made is lost.
 import type { AppState } from "../store";
 import type { Review } from "./review";

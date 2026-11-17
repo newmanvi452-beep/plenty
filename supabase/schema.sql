@@ -1,4 +1,4 @@
--- Plenty: shared menus with guest dish claims.
+-- Serves Twenty: shared menus with guest dish claims.
 -- Run this once in the Supabase SQL editor (Project > SQL Editor > New query > paste > Run).
 --
 -- Security model: the tables are locked (RLS on, no policies, no grants). The app only talks to
@@ -143,7 +143,7 @@ grant execute on function public.claim_dish(text, text, text, text, text) to ano
 grant execute on function public.unclaim(text, uuid, text, text) to anon, authenticated;
 
 -- ---------------------------------------------------------------------------------------------
--- Accounts: each signed-in user gets one private row holding their whole Plenty state, so their
+-- Accounts: each signed-in user gets one private row holding their whole Serves Twenty state, so their
 -- menus, recipes, checklists and notes follow them across devices. Row level security means a
 -- user can only ever read or write their own row (auth.uid() comes from their signed-in token).
 -- ---------------------------------------------------------------------------------------------

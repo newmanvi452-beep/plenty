@@ -49,7 +49,7 @@ export default function App() {
   const planKeys = [...d.planDays.flatMap((p) => p.tasks), ...d.dayOf].map((t) => s.mode + ":" + t.id);
   const pDone = planKeys.filter((k) => s.done[k]).length;
   const titles: Record<Tab, [string, string]> = {
-    home: ["Plenty", "Plan the feast, shop once, cook calmly."],
+    home: ["Serves Twenty", "Plan the feast, shop once, cook calmly."],
     menu: ["Menu", `${d.chosen.length} dishes picked`],
     shop: ["Groceries", `${gTotal - gGot} of ${gTotal} left to grab`],
     plan: ["Cooking plan", `${pDone} of ${planKeys.length} tasks done`],
@@ -103,7 +103,7 @@ function ShareCard({ share }: { share: ShareApi }) {
   const [copied, setCopied] = useState(false);
   if (!share.enabled) return null;
   const copy = async () => { try { await navigator.clipboard.writeText(share.url); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { window.prompt("Copy this link", share.url); } };
-  const send = () => (navigator as Navigator & { share?: (d: { title: string; url: string }) => Promise<void> }).share?.({ title: "Plenty menu", url: share.url }).catch(() => {});
+  const send = () => (navigator as Navigator & { share?: (d: { title: string; url: string }) => Promise<void> }).share?.({ title: "Serves Twenty menu", url: share.url }).catch(() => {});
   return (
     <section className="card" aria-label="Share with guests">
       <div><h2>Share with guests</h2>

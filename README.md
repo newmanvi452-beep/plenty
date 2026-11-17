@@ -1,4 +1,4 @@
-# Plenty
+# Serves Twenty
 
 Thanksgiving & party meal planner: pick a menu, get a scaled grocery list and a cooking timeline.
 

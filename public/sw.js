@@ -1,4 +1,4 @@
-// Plenty service worker: works offline after the first visit.
+// Serves Twenty service worker: works offline after the first visit.
 // Bump VERSION to force clients to drop old caches.
 const VERSION = "plenty-v1";
 const SHELL = ["./", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];

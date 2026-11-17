@@ -1,5 +1,5 @@
 // Pure planning logic (no UI): sizing, scaling, grocery list, and cooking timeline.
-// Ported from the Plenty prototype's renderVals().
+// Ported from the Serves Twenty prototype's renderVals().
 import { Dish, Ingredient, LIB, Mode, SECTIONS, Section, TG_CATS, PARTY_CATS, Category } from "./data";
 import { ceilTo, clock, frac, hm, parseISO, qtyStr, round5, shiftDays, fmtDate } from "./format";
 import { bestVolume, packaged, VOL } from "./packaging";

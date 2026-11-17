@@ -1,4 +1,4 @@
-// Formatting and quantity helpers, ported from the Plenty prototype.
+// Formatting and quantity helpers, ported from the Serves Twenty prototype.
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const THANKSGIVING = new Date(2026, 10, 26);

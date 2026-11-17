@@ -1,4 +1,4 @@
-// Reads and writes the signed-in user's single saved copy of their Plenty data.
+// Reads and writes the signed-in user's single saved copy of their Serves Twenty data.
 // Row level security in the database means this can only ever touch the caller's own row.
 import { SUPABASE_KEY as KEY, SUPABASE_URL as URL_ } from "../share/client";
 import type { AppState } from "../store";

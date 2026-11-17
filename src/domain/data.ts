@@ -1,4 +1,4 @@
-// Dish library and constants, ported from the Plenty prototype.
+// Dish library and constants, ported from the Serves Twenty prototype.
 export type Mode = "tg" | "party";
 export type Section = "P" | "M" | "D" | "B" | "F" | "C" | "S" | "K" | "X";
 /** [name, quantity for one recipe, unit, grocery section] */
