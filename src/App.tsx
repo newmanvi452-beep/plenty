@@ -36,9 +36,10 @@ function Completed({ count, children }: { count: number; children: React.ReactNo
 }
 
 export default function App() {
-  const [s, patch, replace] = useAppState();
-  const account = useAccount(s, replace);
+  const [s, patch, replace, saved, events] = useAppState();
+  const account = useAccount(saved, replace);
   const [showProfile, setShowProfile] = useState(false);
+  const [evSheet, setEvSheet] = useState<null | "new" | "edit">(null);
   const d = derive(s);
   const share = useShare(s, d, patch);
   const [detail, setDetail] = useState<string | null>(null);
@@ -63,7 +64,7 @@ export default function App() {
       <header className="top">
         <div className="brand">
           <Logo size={s.tab === "home" ? 48 : 40} />
-          <div><h1 className={s.tab === "home" ? "wm" : undefined}>{s.tab === "home" ? <Wordmark /> : titles[s.tab][0]}</h1>{s.tab !== "home" && <p>{titles[s.tab][1]}</p>}</div>
+          <div><h1 className={s.tab === "home" ? "wm" : undefined}>{s.tab === "home" ? <Wordmark /> : titles[s.tab][0]}</h1>{s.tab !== "home" && <p>{s.events.length > 1 ? s.eventName + " · " : ""}{titles[s.tab][1]}</p>}</div>
         </div>
         <div className="row" style={{ gap: 8, flex: "none" }}>
           <button className="avatar-btn" aria-label="Your profile" onClick={() => setShowProfile(true)}>{(s.profile.name.trim() || account.email || "").charAt(0).toUpperCase() || "👤"}</button>
@@ -71,7 +72,7 @@ export default function App() {
       </header>
       {s.tab === "home" && <p className="tagline">{titles.home[1]}</p>}
       <main>
-        {s.tab === "home" && <Home s={s} d={d} patch={patch} share={share} account={account} openProfile={() => setShowProfile(true)} />}
+        {s.tab === "home" && <Home s={s} d={d} patch={patch} share={share} account={account} openProfile={() => setShowProfile(true)} events={events} setSheet={setEvSheet} />}
         {s.tab === "menu" && <Menu s={s} d={d} patch={patch} share={share} open={setDetail} openForm={() => setShowForm(true)} />}
         {s.tab === "shop" && <Shop s={s} d={d} patch={patch} />}
         {s.tab === "plan" && <Plan s={s} d={d} patch={patch} share={share} />}
@@ -84,6 +85,7 @@ export default function App() {
       </nav>
       {detail && <DetailSheet id={detail} s={s} d={d} patch={patch} close={() => setDetail(null)} />}
       {showProfile && <ProfileSheet account={account} s={s} patch={patch} close={() => setShowProfile(false)} />}
+      {evSheet && <EventSheet kind={evSheet} s={s} patch={patch} events={events} close={() => setEvSheet(null)} />}
       {showForm && <FormSheet s={s} d={d} patch={patch} close={() => setShowForm(false)} />}
     </div>
   );
@@ -122,7 +124,7 @@ function ShareCard({ share }: { share: ShareApi }) {
     </section>);
 }
 
-function Home({ s, d, patch, share, account, openProfile }: { s: AppState; d: Derived; patch: Patch; share: ShareApi; account: AccountApi; openProfile: () => void }) {
+function Home({ s, d, patch, share, account, openProfile, events, setSheet }: { s: AppState; d: Derived; patch: Patch; share: ShareApi; account: AccountApi; openProfile: () => void; events: EventsApi; setSheet: (k: "new" | "edit") => void }) {
   const isTG = s.mode === "tg";
   const times = isTG ? [12, 13, 14, 15, 16, 17, 18] : [12, 14, 17, 18, 19, 20];
   const serve = isTG ? s.dinnerTG : s.partyTime;
@@ -133,27 +135,29 @@ function Home({ s, d, patch, share, account, openProfile }: { s: AppState; d: De
   const until = date ? daysUntil(date) : null;
   const countdown = until === null ? "" : over ? "This one’s done. Add your notes!" : until > 1 ? `${until} days to go` : until === 1 ? "Tomorrow!" : until === 0 ? "Today!" : "";
   const setPartyDate = (v: string) => patch((st) => {
-    // Picking a new date after the last party is over starts fresh checklists.
-    const stale = isEventOver(st.partyDate, st.partyTime) && v !== st.partyDate;
-    return stale ? { partyDate: v, got: Object.fromEntries(Object.entries(st.got).filter(([k]) => !k.startsWith("g:party:"))), done: Object.fromEntries(Object.entries(st.done).filter(([k]) => !k.startsWith("party:"))) } : { partyDate: v };
+    const tg = st.mode === "tg", cur = tg ? st.tgDate : st.partyDate, at = tg ? st.dinnerTG : st.partyTime, pre = tg ? "tg:" : "party:";
+    // Picking a new date after the last one is over starts fresh checklists.
+    const stale = isEventOver(cur, at) && v !== cur;
+    const date = tg ? { tgDate: v } : { partyDate: v };
+    return stale ? { ...date, got: Object.fromEntries(Object.entries(st.got).filter(([k]) => !k.startsWith("g:" + pre))), done: Object.fromEntries(Object.entries(st.done).filter(([k]) => !k.startsWith(pre))) } : date;
   });
   const note = isTG ? `For ${total} guests${pies ? ` · ${pies} ${pies === 1 ? "pie" : "pies"} total` : ""}`
     : s.partyStyle === "apps" ? "Plan on 10–12 bites per guest" : "A hearty main plus easy sides";
   return (<>
     <AccountRow s={s} account={account} open={openProfile} />
-    <div className="seg" role="group" aria-label="Planner mode">
-      <button aria-pressed={isTG} onClick={() => patch({ mode: "tg" })}>Thanksgiving</button>
-      <button aria-pressed={!isTG} onClick={() => patch({ mode: "party" })}>Party</button>
+    <div className="evbar" role="group" aria-label="Your events">
+      {s.events.map((e) => <button key={e.id} className="evtab" aria-pressed={e.id === s.eid} data-kind={e.mode} onClick={() => events.switchTo(e.id)}>{e.name}</button>)}
+      <button className="evtab add" onClick={() => setSheet("new")}>+ New event</button>
     </div>
     {over && <section className="card" aria-label="Notes prompt"><h2>How did it go?</h2><p className="sub">Mark each dish a hit or a miss and jot notes for next time.</p><button className="btn" onClick={() => patch({ tab: "notes" })}>Add notes</button></section>}
     <section className="hero" aria-label="Your event">
-      <div><p className="kicker">{isTG ? `Thanksgiving · ${date ? fmtDate(date) : ""}` : date ? `Party · ${fmtDate(date)}` : "Party planner"}</p>
+      <div><p className="kicker">{date ? `${s.eventName} · ${fmtDate(date)}` : s.eventName}</p>
         <h2>{isTG ? `Dinner for ${total}` : `${s.partyStyle === "apps" ? "Snacks & apps for " : "A party for "}${total}`}</h2>
         {s.kids > 0 && <p className="sub" style={{ margin: "4px 0 0" }}>{s.adults} adult{s.adults === 1 ? "" : "s"} + {s.kids} kid{s.kids === 1 ? "" : "s"} (kids count as {KID_FACTOR === 0.5 ? "half a portion" : "a smaller portion"})</p>}
         {countdown && <p className="sub" style={{ margin: "4px 0 0", fontWeight: 800 }}>{countdown}</p>}</div>
-      {!isTG && <div className="field"><label htmlFor="pdate">When’s the party?</label>
-        <div className="datebox"><input id="pdate" type="date" value={s.partyDate} onChange={(e) => setPartyDate(e.target.value)} />{!s.partyDate && <span className="dateph" aria-hidden="true">Pick a date</span>}</div>
-        {!s.partyDate && <p className="sub" style={{ margin: 0 }}>Add the date to get dated reminders on your plan and a place for notes afterward.</p>}</div>}
+      {(!isTG || s.eid !== "tg") && <div className="field"><label htmlFor="pdate">{isTG ? "When’s dinner?" : "When’s the party?"}</label>
+        <div className="datebox"><input id="pdate" type="date" value={dateStr} onChange={(e) => setPartyDate(e.target.value)} />{!dateStr && <span className="dateph" aria-hidden="true">Pick a date</span>}</div>
+        {!dateStr && <p className="sub" style={{ margin: 0 }}>Add the date to get dated reminders on your plan and a place for notes afterward.</p>}</div>}
       <Stepper id="adults" label="Adults" value={s.adults} min={1} onChange={(adults) => patch({ adults })} />
       <Stepper id="kids" label="Kids" value={s.kids} min={0} onChange={(kids) => patch({ kids })} />
       <div className="stack" style={{ gap: 8 }}><span className="label">{isTG ? "Dinner at" : "Party starts at"}</span>
@@ -175,12 +179,13 @@ function Home({ s, d, patch, share, account, openProfile }: { s: AppState; d: De
       {d.turkey.twoBirds && <p className="sub">Two birds: roast side by side, or one at a time if your oven is small.</p>}</section>}
     <button className="btn" onClick={() => patch({ tab: "menu" })}>Pick your menu</button>
     <ShareCard share={share} />
+    <button className="linkbtn" onClick={() => setSheet("edit")}>Rename or delete this event</button>
   </>);
 }
 
 function Menu({ s, d, patch, share, open, openForm }: { s: AppState; d: Derived; patch: Patch; share: ShareApi; open: (id: string) => void; openForm: () => void }) {
   const key = selKeyOf(s.mode);
-  const evKey = eventKey(s.mode, s.mode === "tg" ? s.tgDate : s.partyDate);
+  const evKey = eventKey(s.eid, s.mode === "tg" ? s.tgDate : s.partyDate);
   const [undo, setUndo] = useState<{ text: string; run: () => void } | null>(null);
   useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(null), 7000); return () => clearTimeout(t); }, [undo]);
   /** Delete a dish from the list. Your own recipes are deleted for good (after a confirm); built-ins are hidden and can be restored. */
@@ -287,7 +292,7 @@ function Plan({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch; s
 function Notes({ s, d, patch, goHome }: { s: AppState; d: Derived; patch: Patch; goHome: () => void }) {
   const isTG = s.mode === "tg";
   const dateStr = isTG ? s.tgDate : s.partyDate, date = parseISO(dateStr);
-  const key = eventKey(s.mode, dateStr);
+  const key = eventKey(s.eid, dateStr);
   const over = isEventOver(dateStr, isTG ? s.dinnerTG : s.partyTime);
   const title = isTG ? "Thanksgiving" : "Your party";
   const setReview = (dish: Dish, change: { verdict?: Verdict; note?: string }) => patch((st) => {
@@ -531,6 +536,34 @@ function DetailSheet({ id, s, d, patch, close }: { id: string; s: AppState; d: D
       <button className={on ? "btn ghost" : "btn"} onClick={toggle}>{on ? "Remove from menu" : "Add to menu"}</button>
       <button className="btn danger" onClick={remove}>{r.custom ? "Delete this recipe" : "Hide from my list"}</button>
     </div></div>);
+}
+
+type EventsApi = ReturnType<typeof useAppState>[4];
+
+/** Add an event (Thanksgiving, party, Friendsgiving…) or rename/delete the one on screen. */
+function EventSheet({ kind, s, patch, events, close }: { kind: "new" | "edit"; s: AppState; patch: Patch; events: EventsApi; close: () => void }) {
+  const [mode, setMode] = useState<"tg" | "party">("party");
+  const [name, setName] = useState(kind === "edit" ? s.eventName : "");
+  const save = () => {
+    if (kind === "new") { events.add(mode, name); patch({ tab: "home" }); } else if (name.trim()) patch({ eventName: name.trim() });
+    close();
+  };
+  const del = () => {
+    if (window.confirm(`Delete “${s.eventName}”? Its guest list, menu choices, checklists and share link go with it. Your recipes and notes stay.`)) { events.remove(s.eid); close(); }
+  };
+  return (
+    <div className="sheet" onClick={close}><div role="dialog" aria-label={kind === "new" ? "New event" : "Edit event"} onClick={(e) => e.stopPropagation()}>
+      <div className="row"><h2>{kind === "new" ? "New event" : "Edit event"}</h2><button className="round" aria-label="Close" onClick={close}>✕</button></div>
+      {kind === "new" && <div className="stack" style={{ gap: 8 }}><span className="label">What kind?</span>
+        <div className="chips">{([["tg", "Thanksgiving-style dinner"], ["party", "Party"]] as const).map(([k, l]) => (
+          <button key={k} className="chip" aria-pressed={mode === k} onClick={() => setMode(k)}>{l}</button>))}</div></div>}
+      <div className="field"><label htmlFor="ev-name">Event name</label>
+        <input id="ev-name" value={name} maxLength={40} autoComplete="off" placeholder={kind === "new" ? (mode === "tg" ? "Friendsgiving" : "Birthday party") : ""} onChange={(e) => setName(e.target.value)} /></div>
+      <button className="btn" onClick={save}>{kind === "new" ? "Create event" : "Save name"}</button>
+      {kind === "edit" && s.events.length > 1 && <button className="btn ghost danger" onClick={del}>Delete this event</button>}
+      {kind === "edit" && s.events.length <= 1 && <p className="sub" style={{ margin: 0 }}>This is your only event, so it can’t be deleted. Add another first.</p>}
+    </div></div>
+  );
 }
 
 function FormSheet({ s, d, patch, close }: { s: AppState; d: Derived; patch: Patch; close: () => void }) {

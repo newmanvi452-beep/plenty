@@ -1,7 +1,7 @@
 // Reads and writes the signed-in user's single saved copy of their Serves Twenty data.
 // Row level security in the database means this can only ever touch the caller's own row.
 import { SUPABASE_KEY as KEY, SUPABASE_URL as URL_ } from "../share/client";
-import type { AppState } from "../store";
+import type { Saved } from "../store";
 import type { Session } from "./auth";
 
 export class CloudError extends Error { constructor(m: string, readonly status = 0) { super(m); } }
@@ -15,12 +15,12 @@ async function rest(s: Session, path: string, init: RequestInit = {}): Promise<R
   return res;
 }
 
-export interface CloudCopy { data: Partial<AppState>; updated_at: string }
+export interface CloudCopy { data: unknown; updated_at: string }
 export async function pullCloud(s: Session): Promise<CloudCopy | null> {
   const rows = (await (await rest(s, "user_data?select=data,updated_at")).json()) as CloudCopy[];
   return rows[0] ?? null;
 }
-export async function pushCloud(s: Session, data: AppState): Promise<void> {
+export async function pushCloud(s: Session, data: Saved): Promise<void> {
   await rest(s, "user_data?on_conflict=user_id", {
     method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify({ user_id: s.user.id, data, updated_at: new Date().toISOString() }),

@@ -105,4 +105,14 @@ header.top h1.wm { font-size: 36px; line-height: 1; letter-spacing: -0.5px; whit
 .datebox { position: relative; display: block; width: 100%; min-width: 0; }
 .field input[type="date"] { display: block; -webkit-appearance: none; appearance: none; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; min-height: 48px; text-align: left; }
 .field input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
-.dateph { position: absolute; left: 13.5px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 16px; font-weight: 600; pointer-events: none; }
+.dateph { display: none; position: absolute; left: 13.5px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 16px; font-weight: 600; pointer-events: none; }
+/* event switcher on Home: one pill per event, scrolls sideways when there are many */
+.evbar { display: flex; gap: 8px; overflow-x: auto; flex: none; padding: 2px 0 4px; scrollbar-width: none; }
+.evbar::-webkit-scrollbar { display: none; }
+.evtab { flex: none; min-height: 44px; max-width: 70vw; padding: 0 18px; border-radius: 999px; border: 1.5px solid var(--line); background: #fff; font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evtab[aria-pressed="true"] { background: var(--deep); border-color: var(--deep); color: #fff; }
+.evtab[data-kind="party"][aria-pressed="true"] { background: #6A3C9C; border-color: #6A3C9C; }
+.evtab[data-kind="tg"][aria-pressed="true"] { background: #A84A14; border-color: #A84A14; }
+.evtab.add { border-style: dashed; color: var(--deep); background: transparent; }
+.linkbtn { background: none; border: none; color: var(--muted); font-size: 14px; font-weight: 700; text-decoration: underline; min-height: 44px; flex: none; }
+@supports (-webkit-touch-callout: none) { .dateph { display: block; } }

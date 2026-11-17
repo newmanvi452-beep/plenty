@@ -15,7 +15,7 @@ export function useShare(s: AppState, d: Derived, patch: Patch) {
   const [claimCount, setClaimCount] = useState(0);
   const isTG = mode === "tg", date = isTG ? s.tgDate : s.partyDate;
   const fields: EventFields = useMemo(() => ({
-    title: isTG ? "Thanksgiving dinner" : "Party",
+    title: s.eventName || (isTG ? "Thanksgiving dinner" : "Party"),
     date: parseISO(date) ? date : null, serveMin: isTG ? s.dinnerTG : s.partyTime, adults: s.adults, kids: s.kids,
     snapshot: buildSnapshot(d, cookText, s.profile.name.trim() || undefined),
   }), [d, isTG, date, s.dinnerTG, s.partyTime, s.adults, s.kids, s.profile.name]);

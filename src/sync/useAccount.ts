@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fromCloud, mergeStates, toCloud } from "../domain/merge";
-import { AppState, initialState } from "../store";
+import { initialSaved, Saved } from "../store";
 import { accountsEnabled, AuthError, freshSession, loadSession, saveSession, sendCode, Session, signOutRemote, takeNotice, verifyCode, verifyLink } from "./auth";
 import { CloudError, deleteCloud, pullCloud, pushCloud } from "./cloud";
 
@@ -12,7 +12,7 @@ const msg = (e: unknown) => (e instanceof AuthError || e instanceof CloudError ?
 export type SyncStatus = "idle" | "syncing" | "synced" | "error";
 
 /** Account + cloud sync: sign in with an emailed code, then keep this device and the account in step. */
-export function useAccount(state: AppState, replace: (s: AppState) => void) {
+export function useAccount(state: Saved, replace: (s: Saved) => void) {
   const [session, setSession] = useState<Session | null>(() => (accountsEnabled ? loadSession() : null));
   const [status, setStatus] = useState<SyncStatus>("idle"), [error, setError] = useState(takeNotice), [lastSynced, setLastSynced] = useState("");
   const stateRef = useRef(state); stateRef.current = state;
@@ -38,7 +38,7 @@ export function useAccount(state: AppState, replace: (s: AppState) => void) {
         await pushCloud(sess, toCloud(local));
         pushed.current = local.modified;
       } else {
-        const cloudState = fromCloud(cloud.data, initialState());
+        const cloudState = fromCloud(cloud.data);
         const merged = mergeStates(local, cloudState, first);
         const cloudWins = !first && (cloudState.modified || "") > (local.modified || "");
         if (cloudWins || first) replace(merged);
@@ -76,7 +76,7 @@ export function useAccount(state: AppState, replace: (s: AppState) => void) {
   const requestCode = (email: string) => sendCode(email);
   const confirmCode = async (email: string, code: string) => { const s = await verifyCode(email, code); saveSession(s); setSession(s); };
   const confirmLink = async (pasted: string) => { const s = await verifyLink(pasted); saveSession(s); setSession(s); };
-  const clearDevice = () => { saveMeta(null); replace(initialState()); };
+  const clearDevice = () => { saveMeta(null); replace(initialSaved()); };
 
   /** Make sure the latest changes are saved, then sign out and clear this device. */
   const signOut = async () => {
