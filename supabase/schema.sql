@@ -195,3 +195,6 @@ revoke all on public.entitlements from anon, authenticated;
 grant select on public.entitlements to authenticated;
 drop policy if exists "own purchase: read" on public.entitlements;
 create policy "own purchase: read" on public.entitlements for select to authenticated using (auth.uid() = user_id);
+-- This project does not give the server role access to new tables by default; the Stripe webhook
+-- (which runs as service_role) needs these to record and remove purchases.
+grant select, insert, delete on public.entitlements to service_role;
