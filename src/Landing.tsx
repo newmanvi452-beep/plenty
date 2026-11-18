@@ -11,6 +11,14 @@ const FEATURES: [string, string][] = [
   ["On every device", "Sign in with just your email, no password, and your plans follow you from phone to computer."],
 ];
 
+const SHOTS: [string, string][] = [
+  ["01-home", "Home screen: dinner for 20, with adults, kids and dinner time"],
+  ["02-menu", "Menu screen: who is bringing what"],
+  ["03-groceries", "Groceries screen: one shopping list with items checked off"],
+  ["04-plan", "Cooking plan screen: an hour-by-hour plan for the big day"],
+  ["05-notes", "Notes screen: what worked, what to change"],
+];
+
 /** The front page of serves20.com for first-time visitors. People who already use the app go straight to it. */
 export default function Landing() {
   const open = () => { location.hash = "#/app"; };
@@ -18,7 +26,7 @@ export default function Landing() {
     <div className="land">
       <header className="land-top">
         <div className="brand"><Logo size={40} /><h1 className="wm"><Wordmark /></h1></div>
-        <button className="btn ghost" onClick={open}>{PAYWALL_ON ? "Sign in" : "Open the app"}</button>
+        <button className="btn ghost" onClick={open}>{PAYWALL_ON ? "Sign in" : "Open app"}</button>
       </header>
 
       <section className="land-hero">
@@ -26,9 +34,13 @@ export default function Landing() {
         <h2>Plan the feast.<br />Shop once.<br />Cook calmly.</h2>
         <p className="land-lead">Tell Serves 20 how many are coming. It builds the menu, the shopping list and the cooking schedule, and lets your guests sign up to bring a dish.</p>
         <div className="land-cta">
-          <button className="btn" onClick={open}>{PAYWALL_ON ? `Get Serves 20 · ${PRICE_LABEL}` : "Open the app"}</button>
+          <button className="btn" onClick={open}>{PAYWALL_ON ? `Get Serves 20 · ${PRICE_LABEL}` : "Get started"}</button>
           {PAYWALL_ON && <span className="sub">One-time purchase. No subscription.</span>}
         </div>
+      </section>
+
+      <section className="land-preview" aria-label="A look inside the app">
+        {SHOTS.map(([n, alt]) => <img key={n} src={`./brand/preview/${n}.jpg`} alt={alt} width="600" height="1304" loading={n === "01-home" ? "eager" : "lazy"} />)}
       </section>
 
       <section className="land-grid" aria-label="What it does">
