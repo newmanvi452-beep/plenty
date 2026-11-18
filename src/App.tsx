@@ -588,7 +588,7 @@ function FormSheet({ s, d, patch, close }: { s: AppState; d: Derived; patch: Pat
   const sortText = (text: string) => {
     const r = parseRecipeText(cleanOcr(text), catKeys);
     setF({ name: r.name, cat: r.cat, serves: String(r.serves ?? (f.serves || 8)), prep: r.prep ? String(r.prep) : "", cook: r.cook ? String(r.cook) : "", makeAhead: f.makeAhead, lines: r.ingredients.join("\n"), steps: numberSteps(r.directions.join("\n")) });
-    const missing = [!r.ingredients.length && "ingredients", !r.directions.length && "directions", !(r.prep || r.cook) && "prep/cook times"].filter(Boolean);
+    const missing = [!r.ingredients.length && "ingredients", !r.directions.length && "directions"].filter(Boolean);
     setNote(missing.length ? `Sorted. I couldn’t find ${missing.join(", ")}, so please check below.` : "Sorted. Give it a quick look, then save.");
     setErr("");
   };
@@ -609,7 +609,6 @@ function FormSheet({ s, d, patch, close }: { s: AppState; d: Derived; patch: Pat
     const prep = Math.max(0, parseInt(f.prep, 10) || 0), cook = Math.max(0, parseInt(f.cook, 10) || 0);
     if (!name) return setErr("Give your recipe a name.");
     if (!lines.length) return setErr("Add at least one ingredient line.");
-    if (!prep && !cook) return setErr("Add a prep or cook time so it can go on the timeline.");
     const rec: Dish = buildCustomDish({ name, cat: f.cat, mode: s.mode, serves: parseInt(f.serves, 10) || 4, prep, cook, makeAhead: f.makeAhead, ingredients: lines, directions: stepList(f.steps) });
     const key = selKeyOf(s.mode);
     patch((st) => ({ custom: [...st.custom, rec], [key]: { ...st[key], [rec.id]: true } }) as Partial<AppState>);
@@ -631,8 +630,8 @@ function FormSheet({ s, d, patch, close }: { s: AppState; d: Derived; patch: Pat
       <div className="chips" style={{ flexWrap: "wrap" }}>{d.cats.map((c) => <button key={c.key} className="chip" aria-pressed={f.cat === c.key} onClick={() => set({ cat: c.key })}>{c.label}</button>)}</div>
       <div className="row3">
         <div className="field"><label htmlFor="rs">Serves</label><input id="rs" inputMode="numeric" value={f.serves} onChange={(e) => set({ serves: e.target.value })} /></div>
-        <div className="field"><label htmlFor="rpre">Prep (min)</label><input id="rpre" inputMode="numeric" value={f.prep} onChange={(e) => set({ prep: e.target.value })} /></div>
-        <div className="field"><label htmlFor="rck">Cook (min)</label><input id="rck" inputMode="numeric" value={f.cook} onChange={(e) => set({ cook: e.target.value })} /></div>
+        <div className="field"><label htmlFor="rpre">Prep / assemble (min)</label><input id="rpre" inputMode="numeric" value={f.prep} onChange={(e) => set({ prep: e.target.value })} /></div>
+        <div className="field"><label htmlFor="rck">Cook (min, if any)</label><input id="rck" inputMode="numeric" value={f.cook} onChange={(e) => set({ cook: e.target.value })} /></div>
       </div>
       <button className="switch" aria-pressed={f.makeAhead} onClick={() => set({ makeAhead: !f.makeAhead })}>
         Prep it the day before<span className="track" aria-hidden="true"><span className="knob" /></span></button>

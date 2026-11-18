@@ -15,7 +15,7 @@ export function buildCustomDish(i: RecipeInput): Dish {
     if (cook > 0) day.push([cook, `${name}: cook (about ${cook} min)`]);
   } else if (prep > 0 && cook > 0) {
     day.push([prep + cook, `${name}: start prepping (about ${prep} min)`], [cook, `${name}: cook (about ${cook} min)`]);
-  } else if (prep > 0) day.push([prep, `${name}: prep (about ${prep} min)`]);
+  } else if (prep > 0) day.push([prep, `${name}: prep & assemble (about ${prep} min)`]);
   else if (cook > 0) day.push([cook, `${name}: cook (about ${cook} min)`]);
   const parts = [prep ? `${prep} min prep` : "", cook ? `${cook} min cook` : ""].filter(Boolean);
   return {
