@@ -13,7 +13,7 @@ const get = async (slug: string) => (await q("select get_shared_event($1) as e",
 
 beforeAll(async () => {
   db = new PGlite();
-  await db.exec("create role anon nologin; create role authenticated nologin; grant usage on schema public to anon, authenticated;");
+  await db.exec("create role anon nologin; create role authenticated nologin; create role service_role nologin; grant usage on schema public to anon, authenticated, service_role;");
   // Minimal stand-in for Supabase's auth schema: auth.uid() reads the signed-in user from a setting, like PostgREST does.
   await db.exec(`create schema auth;
     create table auth.users (id uuid primary key);

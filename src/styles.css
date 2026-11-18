@@ -152,3 +152,5 @@ body:has(.land) { overflow-y: auto; }
 .land-foot a { color: var(--muted); }
 html:has(.land), body:has(.land) { height: auto; }
 body:has(.land) #root { height: auto; }
+
+.pill2 .pillx { margin: 0 -4px 0 6px; padding: 4px 8px; border: none; background: transparent; color: var(--muted); font-weight: 800; font-size: 13px; line-height: 1; }

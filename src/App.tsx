@@ -217,7 +217,7 @@ function Menu({ s, d, patch, share, open, openForm }: { s: AppState; d: Derived;
   const toggle = (id: string) => patch((st) => ({ [key]: toggleIn(st[key], id) }) as Partial<AppState>);
   return (<>
     <button className="btn dashed" onClick={openForm}>+ Add your own recipe</button>
-    <Overview s={s} d={d} />
+    <Overview s={s} d={d} patch={patch} share={share} />
     <p className="sub" style={{ margin: "-6px 4px 0" }}>Tip: swipe a dish left to remove it.</p>
     {d.cats.map((c) => { const r = d.rec(c.key), t = toneOf(r, d.counts[c.key] || 0); return (
       <section key={c.key} aria-label={c.label}>
@@ -397,23 +397,37 @@ function TabIcon({ name }: { name: Tab }) {
   }
 }
 
+/** Take one handed-off or guest-signed-up item off the list. A guest's sign-up is removed at the source so it doesn't come back. */
+function removeBringItem(s: AppState, patch: Patch, share: ShareApi, x: { dishId?: string; extraId?: string }, who: string) {
+  const guestDish = x.dishId && share.share && s.claimSync[bringKey(s.mode, x.dishId)] === who;
+  const guestExtra = x.extraId && x.extraId.startsWith("sc-") && share.share;
+  if (guestDish) share.removeClaim({ dishId: x.dishId });
+  else if (guestExtra) share.removeClaim({ claimId: x.extraId!.slice(3) });
+  else patch((st) => x.dishId
+    ? { bringers: Object.fromEntries(Object.entries(st.bringers).filter(([k]) => k !== bringKey(st.mode, x.dishId!))) }
+    : { extras: st.extras.filter((e) => e.id !== x.extraId) });
+}
+
 /** Everything at a glance: what you're making, and what each person is bringing. */
-function Overview({ s, d }: { s: AppState; d: Derived }) {
+function Overview({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch; share: ShareApi }) {
   const people = Object.keys(d.bringing);
   const others = d.chosen.length - d.mine.length;
   const me = meLabel(s.profile.name);
-  const row = (name: string, initial: string, items: string[], key: string) => (
+  const row = (name: string, initial: string, items: string[], key: string, remove?: (i: number) => void) => (
     <div className="row" key={key} style={{ alignItems: "flex-start", justifyContent: "flex-start" }}>
       <span className="avatar">{initial}</span>
       <div className="stack" style={{ flex: 1, gap: 6 }}><b>{name}</b>
-        <div className="pills">{items.map((t, i) => <span className="pill2" key={i}>{t}</span>)}</div></div>
+        <div className="pills">{items.map((t, i) => <span className="pill2" key={i}>{t}{remove && <button type="button" className="pillx" aria-label={`Remove ${t} from ${name}`} onClick={() => remove(i)}>✕</button>}</span>)}</div></div>
     </div>);
   return (
     <section className="card" aria-label="Overview">
       <div><h2>Who’s bringing what</h2>
         <p className="sub">{`You’re making ${d.mine.length} of ${d.chosen.length} dishes`}{others ? ` · ${others} covered by others` : ""}{s.shares[s.mode] ? " · guests can still claim any of yours" : ""}</p></div>
       {row(me, meInitial(s.profile.name), [...d.mine.map((r) => r.short || r.name), ...d.mineExtras.map((x) => x.what)], "you")}
-      {people.map((w) => row(w, w[0].toUpperCase(), d.bringing[w].map((x) => x.short), w))}
+      {people.map((w) => row(w, w[0].toUpperCase(), d.bringing[w].map((x) => x.short), w, (i) => {
+        const x = d.bringing[w][i];
+        if (window.confirm(`Take ${x.short} off ${w}’s list? ${s.shares[s.mode] ? `${w} can sign up again from the link.` : ""}`.trim())) removeBringItem(s, patch, share, x, w);
+      }))}
       {!people.length && <p className="sub" style={{ margin: 0 }}>Hand a dish to someone with the arrow on any dish, add an extra below, or share a link from Home so guests can sign up.</p>}
     </section>);
 }
@@ -464,16 +478,7 @@ function Potluck({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch
     patch((st) => ({ extras: [...st.extras, { id: "x" + Date.now(), who: mine ? "" : w, what: t, mode: st.mode }], people: mine || st.people.includes(w) ? st.people : [...st.people, w] }));
     setWhat(""); setErr("");
   };
-  /** Remove one item. If a guest signed up for it, the sign-up is removed at the source so it doesn't come back. */
-  const removeItem = (x: { dishId?: string; extraId?: string }, who: string) => {
-    const guestDish = x.dishId && share.share && s.claimSync[bringKey(s.mode, x.dishId)] === who;
-    const guestExtra = x.extraId && x.extraId.startsWith("sc-") && share.share;
-    if (guestDish) share.removeClaim({ dishId: x.dishId });
-    else if (guestExtra) share.removeClaim({ claimId: x.extraId!.slice(3) });
-    else patch((st) => x.dishId
-      ? { bringers: Object.fromEntries(Object.entries(st.bringers).filter(([k]) => k !== bringKey(st.mode, x.dishId!))) }
-      : { extras: st.extras.filter((e) => e.id !== x.extraId) });
-  };
+  const removeItem = (x: { dishId?: string; extraId?: string }, who: string) => removeBringItem(s, patch, share, x, who);
   return (
     <section className="card" aria-label="Who's bringing what">
       <div><h2>Who’s bringing what</h2><p className="sub">{names.length ? `You’re making ${d.mine.length} dishes · ${names.length} pitching in. Their dishes are off your grocery list.` : "Open any dish on the Menu (tap the arrow) to hand it off to someone."}</p></div>
