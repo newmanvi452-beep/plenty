@@ -1,6 +1,7 @@
 // Talks to the Supabase database through the functions in supabase/schema.sql.
 // Only the public (anon) key is used here. The database decides what each caller may do.
 import { Snapshot, SharedEvent } from "../domain/sharing";
+import { siteBase } from "../native";
 
 const URL_ = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, "");
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -53,5 +54,5 @@ export const claimDish = (slug: string, dishId: string | null, what: string | nu
 export const unclaim = (slug: string, claimId: string, auth: { ownerKey?: string; editToken?: string }) =>
   rpc<null>("unclaim", { p_slug: slug, p_claim_id: claimId, p_owner_key: auth.ownerKey ?? null, p_edit_token: auth.editToken ?? null });
 
-export const shareUrl = (slug: string) => `${location.origin}${location.pathname}#/s/${slug}`;
+export const shareUrl = (slug: string) => `${siteBase()}#/s/${slug}`;
 export const slugFromHash = (hash: string) => /^#\/s\/([0-9a-f]{16})$/i.exec(hash)?.[1] ?? null;

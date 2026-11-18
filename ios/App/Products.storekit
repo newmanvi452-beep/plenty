@@ -1,0 +1,18 @@
+{
+  "identifier" : "0A1B2C3D",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "6760000001",
+      "localizations" : [ { "description" : "Unlock Serves 20 for good. One purchase, no subscription.", "displayName" : "Unlock Serves 20", "locale" : "en_US" } ],
+      "productID" : "com.serves20.app.unlock",
+      "referenceName" : "Unlock Serves 20",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {},
+  "subscriptionGroups" : [],
+  "version" : { "major" : 4, "minor" : 0 }
+}

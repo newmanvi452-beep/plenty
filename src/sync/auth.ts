@@ -1,5 +1,6 @@
 // Sign in with an emailed code (no passwords). Talks to Supabase Auth directly; the session lives in this
 // browser's storage and is refreshed automatically.
+import { siteBase } from "../native";
 import { SUPABASE_KEY as KEY, SUPABASE_URL as URL_, sharingEnabled as accountsEnabled } from "../share/client";
 
 export { accountsEnabled };
@@ -47,7 +48,7 @@ const toSession = (r: TokenResponse): Session => ({
 });
 
 /** Email a sign-in link or code (depending on the email template). Creates the account the first time. */
-export const sendCode = (email: string) => call(`/auth/v1/otp?redirect_to=${encodeURIComponent(location.origin + location.pathname)}`, { email: email.trim(), create_user: true });
+export const sendCode = (email: string) => call(`/auth/v1/otp?redirect_to=${encodeURIComponent(siteBase())}`, { email: email.trim(), create_user: true });
 export const verifyCode = async (email: string, code: string) => toSession(await call<TokenResponse>("/auth/v1/verify", { type: "email", email: email.trim(), token: code.replace(/\s+/g, "") }));
 /**
  * Sign in by pasting the link from the email. This is for the installed home-screen app: tapping the link opens
