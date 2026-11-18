@@ -27,7 +27,7 @@ export default function Paywall({ ent, signedIn, email, signIn, children }: { en
             {signedIn
               ? <p className="sub" style={{ margin: 0 }}>Signed in as {email}. Already purchased with another email? <button className="linkbtn" style={{ minHeight: 0 }} onClick={signIn}>Switch account</button></p>
               : <button className="linkbtn" onClick={signIn}>Already purchased? Sign in</button>}
-            <p className="sub" style={{ margin: 0 }}><a href="#/terms">Terms</a> · <a href="#/privacy">Privacy</a></p>
+            <p className="sub" style={{ margin: 0 }}><a href="#/terms">Terms</a> · <a href="#/privacy">Privacy</a> · <a href="#/support">Help</a></p>
           </>)}
         </section>
       </main>

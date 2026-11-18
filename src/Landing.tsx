@@ -44,7 +44,7 @@ export default function Landing() {
       )}
 
       <footer className="land-foot">
-        <a href="#/privacy">Privacy</a><a href="#/terms">Terms &amp; refunds</a><a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+        <a href="#/support">Support</a><a href="#/privacy">Privacy</a><a href="#/terms">Terms &amp; refunds</a><a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
       </footer>
     </div>
   );

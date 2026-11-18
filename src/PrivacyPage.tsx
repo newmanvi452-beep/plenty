@@ -41,3 +41,4 @@ export default function PrivacyPage() {
       </main>
     </div>);
 }
+export const SUPPORT_EMAIL = "support@serves20.com";

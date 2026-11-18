@@ -6,7 +6,7 @@ import type { AccountApi } from "./useAccount";
 
 /** Flip to true when website payments are live. The iPhone app always asks for the purchase. */
 const WEB_PAYWALL = false;
-export const PAYWALL_ON = isNative || WEB_PAYWALL;
+export const PAYWALL_ON = (isNative && !import.meta.env.VITE_SHOT) || WEB_PAYWALL;
 export const PRICE_LABEL = "$9.99";
 
 const CACHE = "plenty:paid:v1"; // which account was last seen as paid, so it still opens offline

@@ -70,6 +70,6 @@ export default function ProfileSheet({ account, s, patch, close }: { account: Ac
       </section>)}
 
       {!account.enabled && <p className="sub">Sign-in isn’t available in this version.</p>}
-      <p className="sub" style={{ margin: 0, textAlign: "center" }}><a href="#/privacy">Privacy policy</a></p>
+      <p className="sub" style={{ margin: 0, textAlign: "center" }}><a href="#/support">Help</a> · <a href="#/privacy">Privacy policy</a></p>
     </div></div>);
 }
