@@ -178,3 +178,20 @@ begin
 end $$;
 revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
+
+-- ---------------------------------------------------------------------------------------------
+-- Purchases: one row per account that has bought Serves 20 (website via Stripe; App Store later).
+-- Signed-in users can only READ their own row. Only the server (the Stripe webhook, using the
+-- service role) can add or remove rows, so nobody can unlock themselves.
+-- ---------------------------------------------------------------------------------------------
+create table if not exists public.entitlements (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  source text not null default 'stripe',
+  ref text,                       -- Stripe payment_intent id, so a refund can find the row
+  created_at timestamptz not null default now()
+);
+alter table public.entitlements enable row level security;
+revoke all on public.entitlements from anon, authenticated;
+grant select on public.entitlements to authenticated;
+drop policy if exists "own purchase: read" on public.entitlements;
+create policy "own purchase: read" on public.entitlements for select to authenticated using (auth.uid() = user_id);

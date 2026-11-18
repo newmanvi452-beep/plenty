@@ -129,5 +129,26 @@ header.top h1.wm { font-size: 36px; line-height: 1; letter-spacing: -0.5px; whit
   main > * { width: 100%; max-width: 780px; }
   .sheet { align-items: center; justify-content: center; }
   .sheet > div { max-width: 560px; max-height: 88%; border-radius: 28px; }
+  .app.solo { display: flex; max-width: 560px; }
+  .app.solo main { padding: 8px 20px 40px; }
   .toast { left: 262px; right: 32px; bottom: 24px; max-width: 520px; }
 }
+/* Front page */
+.land { max-width: 1040px; margin: 0 auto; padding: calc(24px + env(safe-area-inset-top)) 20px 40px; display: flex; flex-direction: column; gap: 36px; min-height: 100dvh; }
+body:has(.land) { overflow-y: auto; }
+.land-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.land-top .brand { display: flex; align-items: center; gap: 10px; }
+.land-top .btn { min-height: 44px; }
+.land-hero { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; padding: 12px 0 4px; }
+.land-hero h2 { font-size: clamp(38px, 8vw, 68px); line-height: 1.02; letter-spacing: -1px; }
+.land-lead { margin: 0; font-size: 18px; line-height: 1.5; max-width: 560px; color: var(--muted); }
+.land-cta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
+.land-cta .btn { min-height: 56px; font-size: 18px; padding: 0 28px; }
+.land-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.land-price { text-align: center; align-items: center; background: var(--soft); border-color: transparent; padding: 28px 20px; }
+.land-price h2 { font-size: 34px; }
+.land-price .sub { max-width: 520px; }
+.land-foot { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; font-size: 14px; margin-top: auto; }
+.land-foot a { color: var(--muted); }
+html:has(.land), body:has(.land) { height: auto; }
+body:has(.land) #root { height: auto; }

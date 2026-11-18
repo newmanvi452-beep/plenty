@@ -33,3 +33,19 @@ export async function deleteCloud(s: Session): Promise<void> {
 export async function deleteAccountRemote(s: Session): Promise<void> {
   await rest(s, "rpc/delete_my_account", { method: "POST", body: "{}" });
 }
+
+/** Has this account bought Serves 20? (The row can only be added by the server after a payment.) */
+export async function fetchPurchased(s: Session): Promise<boolean> {
+  const rows = (await (await rest(s, "entitlements?select=user_id")).json()) as unknown[];
+  return rows.length > 0;
+}
+/** Ask the server for a Stripe checkout address. Returns "already" if this account has bought it. */
+export async function startCheckout(s: Session): Promise<string> {
+  let res: Response;
+  try { res = await fetch(`${URL_}/functions/v1/checkout`, { method: "POST", headers: { apikey: KEY!, Authorization: `Bearer ${s.access_token}`, "Content-Type": "application/json" }, body: "{}" }); }
+  catch { throw new CloudError("Can’t reach the checkout. Check your connection."); }
+  const j = await res.json().catch(() => ({})) as { url?: string; already?: boolean; error?: string };
+  if (j.already) return "already";
+  if (!res.ok || !j.url) throw new CloudError(j.error || "Couldn’t start checkout. Please try again.", res.status);
+  return j.url;
+}

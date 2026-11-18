@@ -10,6 +10,8 @@ import { AppState, Tab, useAppState } from "./store";
 import { ShareApi, useShare } from "./share/useShare";
 import ProfileSheet from "./ProfileSheet";
 import { AccountApi, useAccount } from "./sync/useAccount";
+import { PAYWALL_ON, useEntitlement } from "./sync/useEntitlement";
+import Paywall from "./Paywall";
 
 type Patch = (p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 const Check = () => <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>;
@@ -38,6 +40,7 @@ function Completed({ count, children }: { count: number; children: React.ReactNo
 export default function App() {
   const [s, patch, replace, saved, events] = useAppState();
   const account = useAccount(saved, replace);
+  const ent = useEntitlement(account);
   const [showProfile, setShowProfile] = useState(false);
   const [evSheet, setEvSheet] = useState<null | "new" | "edit">(null);
   const d = derive(s);
@@ -58,6 +61,11 @@ export default function App() {
     notes: ["Notes", "What worked, what to change"],
   };
   const go = (tab: Tab) => { setDetail(null); setShowForm(false); patch({ tab }); };
+
+  if (PAYWALL_ON && !ent.paid) return (
+    <Paywall ent={ent} signedIn={!!account.session} email={account.email} signIn={() => setShowProfile(true)}>
+      {showProfile && <ProfileSheet account={account} s={s} patch={patch} close={() => setShowProfile(false)} />}
+    </Paywall>);
 
   return (
     <div className="app">
