@@ -1,3 +1,4 @@
+import { Logo } from "../Logo";
 import { useCallback, useEffect, useState } from "react";
 import { clock, fmtDate, parseISO } from "../domain/format";
 import { Claim, SharedDish, SharedEvent } from "../domain/sharing";
@@ -49,7 +50,7 @@ export default function GuestPage({ slug }: { slug: string }) {
   return (
     <div className="app">
       <header className="top"><div className="brand">
-        <svg width="40" height="40" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="28" fill="var(--soft)" /><path d="M17 41c0-13 9-22 25-24-1 15-10 24-25 24z" fill="var(--mid)" /><path d="M17 41l16-16" stroke="var(--deep)" strokeWidth="2.5" strokeLinecap="round" fill="none" /></svg>
+        <Logo size={40} />
         <div><h1>{ev.title}</h1><p>{date ? fmtDate(date) : "Date to be announced"}{ev.serve_min !== null ? ` · ${clock(ev.serve_min)}` : ""}</p></div></div></header>
       <main>
         <section className="hero"><div><p className="kicker">{ev.snapshot.host ? `${ev.snapshot.host} invited you` : "You’re invited"}</p><h2>What can you bring?</h2></div>
