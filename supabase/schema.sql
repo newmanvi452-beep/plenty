@@ -164,3 +164,17 @@ create policy "own row: read" on public.user_data for select to authenticated us
 create policy "own row: insert" on public.user_data for insert to authenticated with check (auth.uid() = user_id);
 create policy "own row: update" on public.user_data for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own row: delete" on public.user_data for delete to authenticated using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------------------------
+-- Delete my account: a signed-in user can erase their login and everything saved under it.
+-- (user_data goes with it through the cascade above.) Shared menus are removed by the app first,
+-- using each menu's edit token, because the database has no link between a user and a shared menu.
+-- ---------------------------------------------------------------------------------------------
+create or replace function public.delete_my_account() returns void
+language plpgsql security definer set search_path = public, auth as $$
+begin
+  if auth.uid() is null then raise exception 'not allowed'; end if;
+  delete from auth.users where id = auth.uid();
+end $$;
+revoke all on function public.delete_my_account() from public, anon;
+grant execute on function public.delete_my_account() to authenticated;

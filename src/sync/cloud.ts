@@ -29,3 +29,7 @@ export async function pushCloud(s: Session, data: Saved): Promise<void> {
 export async function deleteCloud(s: Session): Promise<void> {
   await rest(s, `user_data?user_id=eq.${encodeURIComponent(s.user.id)}`, { method: "DELETE" });
 }
+/** Erase the login itself (and, through the database, everything saved under it). */
+export async function deleteAccountRemote(s: Session): Promise<void> {
+  await rest(s, "rpc/delete_my_account", { method: "POST", body: "{}" });
+}

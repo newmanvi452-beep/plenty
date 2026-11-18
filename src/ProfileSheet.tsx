@@ -65,10 +65,11 @@ export default function ProfileSheet({ account, s, patch, close }: { account: Ac
         {account.error && <p className="err" role="alert">{account.error}</p>}
         {account.status === "error" && <button className="btn ghost" onClick={account.syncNow}>Try again</button>}
         <button className="btn ghost" disabled={busy} onClick={() => { if (window.confirm("Sign out? Your plans stay saved in your account. This device will be cleared, so sign in again to get them back.")) run(async () => { await account.signOut(); close(); }); }}>Sign out</button>
-        <button className="btn danger" disabled={busy} onClick={() => { if (window.confirm("Delete everything saved in your account? Your menus, recipes and notes will be erased for good, and this device will be cleared.")) run(async () => { await account.deleteData(); close(); }); }}>Delete my saved data</button>
+        <button className="btn danger" disabled={busy} onClick={() => { if (window.confirm("Delete your account? Your login, saved plans and every shared menu will be erased for good, and this device will be cleared. This can’t be undone.")) run(async () => { await account.deleteAccount(); close(); }); }}>Delete my account</button>
         {err && <p className="err" role="alert">{err}</p>}
       </section>)}
 
       {!account.enabled && <p className="sub">Sign-in isn’t available in this version.</p>}
+      <p className="sub" style={{ margin: 0, textAlign: "center" }}><a href="#/privacy">Privacy policy</a></p>
     </div></div>);
 }

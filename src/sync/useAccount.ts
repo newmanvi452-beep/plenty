@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fromCloud, mergeStates, toCloud } from "../domain/merge";
 import { initialSaved, Saved } from "../store";
 import { accountsEnabled, AuthError, freshSession, loadSession, saveSession, sendCode, Session, signOutRemote, takeNotice, verifyCode, verifyLink } from "./auth";
-import { CloudError, deleteCloud, pullCloud, pushCloud } from "./cloud";
+import { CloudError, deleteAccountRemote, deleteCloud, pullCloud, pushCloud } from "./cloud";
+import { deleteShare } from "../share/client";
 
 const META = "plenty:sync:v1"; // which account this device's data last synced with
 const loadMeta = (): { userId?: string } => { try { return JSON.parse(localStorage.getItem(META) || "{}"); } catch { return {}; } };
@@ -94,6 +95,14 @@ export function useAccount(state: Saved, replace: (s: Saved) => void) {
     await signOutRemote(cur); drop(); clearDevice();
   };
 
-  return { enabled: accountsEnabled, session, email: session?.user.email ?? "", status, error, lastSynced, requestCode, confirmCode, confirmLink, signOut, deleteData, syncNow };
+  /** Stop every shared menu, erase the login and everything saved under it, and clear this device. */
+  const deleteAccount = async () => {
+    const cur = sessionRef.current; if (!cur) return;
+    for (const e of stateRef.current.events) for (const sh of Object.values(e.shares)) { if (sh) await deleteShare(sh.slug, sh.token).catch(() => undefined); }
+    try { await deleteAccountRemote(await freshSession(cur)); } catch (e) { throw new AuthError(msg(e)); }
+    drop(); clearDevice();
+  };
+
+  return { enabled: accountsEnabled, session, email: session?.user.email ?? "", status, error, lastSynced, requestCode, confirmCode, confirmLink, signOut, deleteData, deleteAccount, syncNow };
 }
 export type AccountApi = ReturnType<typeof useAccount>;
