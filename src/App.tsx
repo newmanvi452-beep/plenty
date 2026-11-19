@@ -10,8 +10,10 @@ import { AppState, Tab, useAppState } from "./store";
 import { ShareApi, useShare } from "./share/useShare";
 import ProfileSheet from "./ProfileSheet";
 import { AccountApi, useAccount } from "./sync/useAccount";
-import { PAYWALL_ON, useEntitlement } from "./sync/useEntitlement";
-import Paywall from "./Paywall";
+import { PAYWALL_ON, WEB_EMAIL_GATE, useEntitlement } from "./sync/useEntitlement";
+import { UnlockSheet, LockCard } from "./Paywall";
+import SignupGate from "./SignupGate";
+import { isNative } from "./native";
 
 type Patch = (p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 const Check = () => <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>;
@@ -41,10 +43,14 @@ export default function App() {
   const [s, patch, replace, saved, events] = useAppState();
   const account = useAccount(saved, replace);
   const ent = useEntitlement(account);
-  const [showProfile, setShowProfile] = useState(false);
+  const [showProfile, setShowProfile] = useState(false), [showUnlock, setShowUnlock] = useState(false);
   const [evSheet, setEvSheet] = useState<null | "new" | "edit">(null);
   const d = derive(s);
-  const share = useShare(s, d, patch);
+  const realShare = useShare(s, d, patch);
+  /** Not bought yet: the app is a limited preview, and locked things open the unlock window instead. */
+  const preview = PAYWALL_ON && !ent.paid;
+  const lock = () => setShowUnlock(true);
+  const share: ShareApi = preview ? { ...realShare, create: (async () => lock()) as ShareApi["create"] } : realShare;
   const [detail, setDetail] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   useEffect(() => { document.documentElement.dataset.mode = s.mode; }, [s.mode]);
@@ -62,10 +68,8 @@ export default function App() {
   };
   const go = (tab: Tab) => { setDetail(null); setShowForm(false); patch({ tab }); };
 
-  if (PAYWALL_ON && !ent.paid) return (
-    <Paywall ent={ent} signedIn={!!account.session} email={account.email} signIn={() => setShowProfile(true)}>
-      {showProfile && <ProfileSheet account={account} s={s} patch={patch} close={() => setShowProfile(false)} />}
-    </Paywall>);
+  // The website asks for an email (and an emailed code) before anyone can use the planner.
+  if (WEB_EMAIL_GATE && !isNative && account.enabled && !account.session) return <SignupGate account={account} />;
 
   return (
     <div className="app">
@@ -80,11 +84,12 @@ export default function App() {
       </header>
       {s.tab === "home" && <p className="tagline">{titles.home[1]}</p>}
       <main>
+        {preview && <button className="previewbar" onClick={lock}>👀 Preview · Unlock everything for {ent.price}</button>}
         {s.tab === "home" && <Home s={s} d={d} patch={patch} share={share} account={account} openProfile={() => setShowProfile(true)} events={events} setSheet={setEvSheet} />}
-        {s.tab === "menu" && <Menu s={s} d={d} patch={patch} share={share} open={setDetail} openForm={() => setShowForm(true)} />}
-        {s.tab === "shop" && <Shop s={s} d={d} patch={patch} />}
-        {s.tab === "plan" && <Plan s={s} d={d} patch={patch} share={share} />}
-        {s.tab === "notes" && <Notes s={s} d={d} patch={patch} goHome={() => go("home")} />}
+        {s.tab === "menu" && <Menu s={s} d={d} patch={patch} share={share} open={preview ? (() => lock()) : setDetail} openForm={preview ? lock : () => setShowForm(true)} />}
+        {s.tab === "shop" && <Shop s={s} d={d} patch={patch} preview={preview} lock={lock} price={ent.price} />}
+        {s.tab === "plan" && <Plan s={s} d={d} patch={patch} share={share} preview={preview} lock={lock} price={ent.price} />}
+        {s.tab === "notes" && (preview ? <LockCard title="Notes for next time" text="Keep what worked and what to change for next year, for every dish." price={ent.price} lock={lock} /> : <Notes s={s} d={d} patch={patch} goHome={() => go("home")} />)}
       </main>
       <nav className="tabs" aria-label="Sections">
         {([["home", "Home"], ["menu", "Menu"], ["shop", "Groceries"], ["plan", "Plan"], ["notes", "Notes"]] as const).map(([k, l]) => (
@@ -92,6 +97,7 @@ export default function App() {
         ))}
       </nav>
       {detail && <DetailSheet id={detail} s={s} d={d} patch={patch} close={() => setDetail(null)} />}
+      {preview && showUnlock && <UnlockSheet ent={ent} signedIn={!!account.session} email={account.email} signIn={() => { setShowUnlock(false); setShowProfile(true); }} close={() => setShowUnlock(false)} />}
       {showProfile && <ProfileSheet account={account} s={s} patch={patch} close={() => setShowProfile(false)} />}
       {evSheet && <EventSheet kind={evSheet} s={s} patch={patch} events={events} close={() => setEvSheet(null)} />}
       {showForm && <FormSheet s={s} d={d} patch={patch} close={() => setShowForm(false)} />}
@@ -243,20 +249,25 @@ function Menu({ s, d, patch, share, open, openForm }: { s: AppState; d: Derived;
   </>);
 }
 
-function Shop({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
+const PREVIEW_ITEMS = 6, PREVIEW_TASKS = 4;
+function Shop({ s, d, patch, preview, lock, price }: { s: AppState; d: Derived; patch: Patch; preview: boolean; lock: () => void; price: string }) {
   if (!d.grocery.length) return <p className="empty">Pick some dishes and your list shows up here.</p>;
   const flip = (k: string) => patch((st) => ({ got: toggleIn(st.got, k) }));
   const todo = d.grocery.map((g) => ({ ...g, items: g.items.filter((i) => !s.got[i.key]) })).filter((g) => g.items.length);
   const got = d.grocery.flatMap((g) => g.items.filter((i) => s.got[i.key]));
+  // In preview, only the first few items show; the rest sit behind the unlock.
+  let shown = 0, hidden = 0;
+  const visible = todo.map((g) => { const room = preview ? Math.max(0, PREVIEW_ITEMS - shown) : g.items.length; const items = g.items.slice(0, room); shown += items.length; hidden += g.items.length - items.length; return { ...g, items, total: g.items.length }; }).filter((g) => g.items.length);
   return (<>
-    {todo.map((g) => (
+    {visible.map((g) => (
       <section className="card" key={g.section} aria-label={g.label}>
-        <h2>{g.label} <span className="sub">· {g.items.length}</span></h2>
+        <h2>{g.label} <span className="sub">· {g.total}</span></h2>
         <div>{g.items.map((i) => (
           <button key={i.key} className="item" aria-pressed={false} onClick={() => flip(i.key)}>
             <span className="box" />
             <span className="txt"><b>{i.buy}</b> {i.name}<small>{i.need ? `Recipes need ${i.need} · ` : ""}For {i.used.join(", ")}</small></span></button>))}</div>
       </section>))}
+    {hidden > 0 && <LockCard title={`${hidden} more item${hidden === 1 ? "" : "s"} on your list`} text="Unlock Serves 20 to see your full shopping list, sorted by aisle." price={price} lock={lock} />}
     {!todo.length && <p className="empty">Everything's in the cart. 🎉</p>}
     <Completed count={got.length}>
       {got.map((i) => (
@@ -267,7 +278,7 @@ function Shop({ s, d, patch }: { s: AppState; d: Derived; patch: Patch }) {
   </>);
 }
 
-function Plan({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch; share: ShareApi }) {
+function Plan({ s, d, patch, share, preview, lock, price }: { s: AppState; d: Derived; patch: Patch; share: ShareApi; preview: boolean; lock: () => void; price: string }) {
   const isDone = (id: string) => !!s.done[s.mode + ":" + id];
   const flip = (id: string) => patch((st) => ({ done: toggleIn(st.done, st.mode + ":" + id) }));
   const row = (id: string, text: string, on: boolean, lead?: React.ReactNode, tag?: string) => (
@@ -279,16 +290,22 @@ function Plan({ s, d, patch, share }: { s: AppState; d: Derived; patch: Patch; s
   const doneBefore = d.planDays.flatMap((p) => p.tasks.filter((t) => isDone(t.id)).map((t) => ({ ...t, day: p.label })));
   const doneDay = d.dayOf.filter((t) => isDone(t.id));
   const nothingLeft = before ? !daysTodo.length : !dayTodo.length;
+  // In preview, only the first few steps show; the rest sit behind the unlock.
+  let left = preview ? PREVIEW_TASKS : Infinity, hiddenTasks = 0;
+  const daysShown = daysTodo.map((p) => { const tasks = p.tasks.slice(0, left); left -= tasks.length; hiddenTasks += p.tasks.length - tasks.length; return { ...p, tasks }; }).filter((p) => p.tasks.length);
+  const dayShown = dayTodo.slice(0, Math.max(0, preview ? PREVIEW_TASKS : dayTodo.length));
+  if (!before && preview) hiddenTasks = dayTodo.length - dayShown.length;
   return (<>
     <div className="seg" role="group" aria-label="Plan view">
       <button aria-pressed={before} onClick={() => patch({ planView: "before" })}>Before</button>
       <button aria-pressed={!before} onClick={() => patch({ planView: "dayof" })}>{s.mode === "tg" ? "Turkey Day" : "Party day"}</button>
     </div>
-    {before && daysTodo.map((p) => (
+    {before && daysShown.map((p) => (
       <section className="card" key={p.daysBefore}><div><h2>{p.label}</h2>{p.sub && <p className="sub">{p.sub}</p>}</div>{p.tasks.map((t) => row(t.id, t.text, false))}</section>))}
     {!before && <>
       {d.ovenNote && <p className="sub" style={{ margin: 0 }}>{d.ovenNote}</p>}
-      {!!dayTodo.length && <section className="card">{dayTodo.map((t) => row(t.id, t.text, false, <span className="time">{t.time}</span>, t.tag))}</section>}</>}
+      {!!dayShown.length && <section className="card">{dayShown.map((t) => row(t.id, t.text, false, <span className="time">{t.time}</span>, t.tag))}</section>}</>}
+    {hiddenTasks > 0 && <LockCard title={`${hiddenTasks} more step${hiddenTasks === 1 ? "" : "s"} in your plan`} text="Unlock Serves 20 to see your whole cooking plan, day by day and hour by hour." price={price} lock={lock} />}
     {nothingLeft && <p className="empty">All caught up. 🎉</p>}
     <Completed count={before ? doneBefore.length : doneDay.length}>
       {before ? doneBefore.map((t) => row(t.id, t.text, true, undefined, t.day)) : doneDay.map((t) => row(t.id, t.text, true, <span className="time">{t.time}</span>, t.tag))}

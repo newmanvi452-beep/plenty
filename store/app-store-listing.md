@@ -55,7 +55,7 @@ Questions? We'd love to hear from you at support@serves20.com.
 - **Price:** USD 9.99 (Tier 10)
 - **Family Sharing:** off
 - **Review screenshot:** the unlock screen (screenshot file 06-unlock.png)
-- **Review note:** The unlock screen appears on first launch. Tapping "Unlock Serves 20" starts the purchase; "Restore purchase" restores it.
+- **Review note:** The unlock window opens from the preview banner or any locked item. Tapping "Unlock Serves 20" starts the purchase; "Restore purchase" restores it.
 
 ## App Privacy (nutrition label answers)
 - **Do you or your third-party partners collect data from this app?** Yes
@@ -72,7 +72,7 @@ Questions? We'd love to hear from you at support@serves20.com.
 ## Notes for App Review
 Thank you for reviewing Serves 20, a Thanksgiving and party meal planner.
 
-- On first launch the app shows an unlock screen. Tapping **Unlock Serves 20** starts the one-time in-app purchase ($9.99, non-consumable). **Restore purchase** is on the same screen. After unlocking, every feature works without an account.
+- The app opens into a free **preview**: the Home and Menu screens work, and the Groceries and Cooking plan screens show the first few items. Recipe details, sharing with guests, adding recipes and Notes are locked. Tapping any locked item, or the "Preview · Unlock everything" banner at the top, opens the unlock window. **Unlock Serves 20** starts the one-time in-app purchase ($9.99, non-consumable). **Restore purchase** is in the same window. After unlocking, every feature works without an account.
 - **Sign-in is optional.** It only saves plans to the user's account so they follow the person to other devices. Sign-in uses a one-time code emailed to the address entered (no password). You can use any email address you control. Open the profile (circle at the top right of the Home screen) → enter email → enter the emailed code.
 - **Account deletion** (Guideline 5.1.1(v)): after signing in, open the profile → **Delete my account**. This immediately erases the account, saved plans and shared menus.
 - **Share with guests:** on Home, tap "Share with guests" to create a link. Guests open the link in a browser (no app or account needed) and sign up to bring a dish.

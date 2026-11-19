@@ -4,7 +4,9 @@ import { AuthError, freshSession } from "./auth";
 import { CloudError, fetchPurchased, startCheckout } from "./cloud";
 import type { AccountApi } from "./useAccount";
 
-/** Flip to true when website payments are live. The iPhone app always asks for the purchase. */
+/** Website: sign up with an email before using the planner (on now). */
+export const WEB_EMAIL_GATE = true;
+/** Website: flip to true when payments are live, and the website becomes a limited preview until the unlock is bought. */
 const WEB_PAYWALL = false;
 export const PAYWALL_ON = (isNative && !import.meta.env.VITE_SHOT) || WEB_PAYWALL;
 export const PRICE_LABEL = "$9.99";
