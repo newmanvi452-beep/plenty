@@ -76,8 +76,10 @@ export default function GuestPage({ slug }: { slug: string }) {
             {mine(c) && <button className="chip" style={{ minHeight: 36 }} disabled={busy} onClick={() => remove(c)}>Remove</button>}</div>)}
           <div className="field"><label htmlFor="guest-extra">Ice, drinks, napkins…</label><input id="guest-extra" value={extra} maxLength={80} onChange={(e) => setExtra(e.target.value)} /></div>
           <button className="btn ghost" disabled={busy || !extra.trim()} onClick={() => claim(null, extra.trim())}>Add</button></section>
-        <p className="sub" style={{ textAlign: "center" }}>Made with Serves Twenty</p>
-      <p className="sub" style={{ textAlign: "center" }}><a href="#/privacy">Privacy</a></p>
+        <footer className="guestfoot">
+          <Logo size={36} />
+          <p><strong>Planning your own get-together?</strong><br /><a href="https://serves20.com/">Try Serves 20</a> · <a href="#/privacy">Privacy</a></p>
+        </footer>
       </main>
     </div>);
 }
