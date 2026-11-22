@@ -341,3 +341,58 @@ describe("your own extras and profile", () => {
     expect(buildSnapshot(derive(base()), cookText, "Vi").host).toBe("Vi");
   });
 });
+
+describe("grocery list: one line per thing, right aisle, packages", () => {
+  const dish = (id: string, name: string, lines: string[]) =>
+    buildCustomDish({ id, name, cat: "sides", mode: "tg", serves: 12, prep: 10, cook: 20, makeAhead: false, ingredients: lines, directions: [] });
+  const dishes = [
+    dish("c1", "Crockpot Mac and Cheese", ["1/2 tsp Black pepper", "1 tsp Salt", "1/4 tsp Garlic powder", "1/4 cup Butter cubed", "12 oz Evaporated milk", "1 1/2 cups American cheese (cubed)", "3 cups Sharp cheddar", "1 lb Elbow pasta uncooked", "2 1/2 cups Whole milk"]),
+    dish("c2", "Creamed Corn", ["4 Tbl Butter", "1 Block Cream Cheese", "1 Green Onions"]),
+    dish("c3", "Scalloped Sweet Potato", ["1/2 cup Butter", "2 ¢ Salt and pepper", "5 cloves Garlic, minced", "3/4 tsp Cornstarch"]),
+    dish("c4", "Veggie Tray", ["2 Veggies Tray"]),
+    dish("c5", "Honey Mustard Carrots", ["1 Salt & pepper", "1/4 tsp Red pepper flake", "1 Fresh Parsley"]),
+    dish("c6", "Ricotta Dip", ["24 oz Whole Milk Ricotta", "2 Salt and Pepper", "2 Salt", "5 oz Cream cheese"]),
+    dish("c7", "Bagged Salad", ["1 Bagged salad"]),
+  ];
+  const d = derive(base({ custom: dishes, selTG: Object.fromEntries(dishes.map((x) => [x.id, true])), adults: 12 }));
+  const items = d.grocery.flatMap((g) => g.items.map((i) => ({ ...i, label: g.label })));
+  const find = (re: RegExp) => items.filter((i) => re.test(i.name));
+
+  it("salt and pepper are each listed once, with no amount", () => {
+    expect(find(/^salt$/i)).toHaveLength(1);
+    expect(find(/pepper/i).filter((i) => i.section === "X")).toHaveLength(1);
+    const salt = find(/^salt$/i)[0];
+    expect(salt.buy).toBe("");
+    expect(salt.used.length).toBeGreaterThan(3);
+  });
+  it("all the butter is one line, counted in sticks", () => {
+    const b = find(/butter/i);
+    expect(b).toHaveLength(1);
+    expect(b[0].buy).toMatch(/stick/);
+  });
+  it("cream cheese from two recipes is one line in 8-oz blocks", () => {
+    const c = find(/cream cheese/i);
+    expect(c).toHaveLength(1);
+    expect(c[0].buy).toMatch(/8-oz block/);
+  });
+  it("puts things in the right aisle", () => {
+    const aisle = (re: RegExp) => find(re)[0]?.label;
+    expect(aisle(/evaporated milk/i)).toBe("Pantry & canned");
+    expect(find(/evaporated milk/i)[0].buy).toMatch(/12-oz can/);
+    expect(aisle(/american cheese/i)).toBe("Dairy & eggs");
+    expect(aisle(/veggies tray/i)).toBe("Produce");
+    expect(aisle(/bagged salad/i)).toBe("Produce");
+    expect(aisle(/garlic powder/i)).toBe("Spices");
+    expect(aisle(/red pepper flake/i)).toBe("Spices");
+    expect(aisle(/cornstarch/i)).toBe("Staples: check your pantry");
+    expect(aisle(/^garlic$/i)).toBe("Produce");
+  });
+  it("buys packages, not recipe amounts", () => {
+    expect(find(/ricotta/i)[0].buy).toMatch(/15-oz tub/);
+    expect(find(/cheddar/i)[0].buy).toMatch(/8-oz bag/);
+  });
+  it("reads custom units like Tbl and C", () => {
+    expect(parseLine("4 Tbl Butter")).toEqual(["Butter", 4, "tbsp", "D"]);
+    expect(parseLine("1 C Dried Cranberries")[2]).toBe("cup");
+  });
+});

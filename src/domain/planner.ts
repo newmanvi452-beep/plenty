@@ -2,6 +2,7 @@
 // Ported from the Serves Twenty prototype's renderVals().
 import { Dish, Ingredient, LIB, Mode, SECTIONS, Section, TG_CATS, PARTY_CATS, Category } from "./data";
 import { ceilTo, clock, frac, hm, parseISO, qtyStr, round5, shiftDays, fmtDate } from "./format";
+import { groceryLines } from "./ingredients";
 import { bestVolume, packaged, VOL } from "./packaging";
 
 /** A child eats about half as much as an adult. */
@@ -78,20 +79,21 @@ export function roastMin(lbs: number): number {
 
 // ---- Custom recipe parsing ---------------------------------------------
 
-const UNIT_WORDS: Record<string, string> = { cup: "cup", cups: "cup", tablespoon: "tbsp", tablespoons: "tbsp", tbsp: "tbsp", tbs: "tbsp", teaspoon: "tsp", teaspoons: "tsp", tsp: "tsp", lb: "lb", lbs: "lb", pound: "lb", pounds: "lb", oz: "oz", ounce: "oz", ounces: "oz", can: "can", cans: "can", clove: "clove", cloves: "clove", bunch: "bunch", bunches: "bunch", stick: "stick", sticks: "stick", package: "pack", packages: "pack", pkg: "pack", pack: "pack", packs: "pack", bag: "bag", bags: "bag", jar: "jar", jars: "jar", box: "box", boxes: "box", pint: "pint", pints: "pint", bottle: "bottle", bottles: "bottle", slice: "slices", slices: "slices", head: "head", heads: "head", sheet: "sheet", sheets: "sheet", quart: "quart", quarts: "quart", gallon: "gallon", gallons: "gallon" };
+const UNIT_WORDS: Record<string, string> = { cup: "cup", cups: "cup", tablespoon: "tbsp", tablespoons: "tbsp", tbsp: "tbsp", tbs: "tbsp", tbl: "tbsp", tbls: "tbsp", tb: "tbsp", c: "cup", teaspoon: "tsp", teaspoons: "tsp", tsp: "tsp", lb: "lb", lbs: "lb", pound: "lb", pounds: "lb", oz: "oz", ounce: "oz", ounces: "oz", can: "can", cans: "can", clove: "clove", cloves: "clove", bunch: "bunch", bunches: "bunch", stick: "stick", sticks: "stick", package: "pack", packages: "pack", pkg: "pack", pack: "pack", packs: "pack", bag: "bag", bags: "bag", jar: "jar", jars: "jar", box: "box", boxes: "box", pint: "pint", pints: "pint", bottle: "bottle", bottles: "bottle", slice: "slices", slices: "slices", head: "head", heads: "head", sheet: "sheet", sheets: "sheet", quart: "quart", quarts: "quart", gallon: "gallon", gallons: "gallon" };
 
 export function guessSec(name: string): Section {
   const n = name.toLowerCase();
-  const has = (arr: string[]) => arr.some((w) => n.includes(w));
-  if (has(["broth", "stock", "sauce", "can ", "canned", "pasta", "noodle", "rice", "beans"])) return "C";
-  if (has(["salt", "black pepper", "olive oil", "vegetable oil", "flour", "sugar", "vanilla", "baking soda", "baking powder"])) return "X";
-  if (has(["frozen", "ice cream"])) return "F";
-  if (has(["chicken", "beef", "pork", "turkey", "bacon", "sausage", "ham", "shrimp", "salmon", "steak", "lamb"])) return "M";
-  if (has(["milk", "butter", "cheese", "cream", "egg", "yogurt", "parmesan", "mozzarella", "cheddar", "ricotta"])) return "D";
-  if (has(["bread", "roll", "bun", "tortilla", "crust", "baguette"])) return "B";
-  if (has(["cinnamon", "cumin", "paprika", "nutmeg", "oregano", "chili powder", "clove", "seasoning", "spice"])) return "S";
-  if (has(["wine", "juice", "soda", "beer", "cider", "seltzer"])) return "K";
-  if (has(["onion", "garlic", "potato", "apple", "lemon", "lime", "orange", "berr", "lettuce", "tomato", "carrot", "celery", "parsley", "cilantro", "basil", "thyme", "sage", "rosemary", "spinach", "mushroom", "corn", "squash", "pepper", "greens", "herb", "shallot", "pear", "kale"])) return "P";
+  const has = (re: RegExp) => re.test(n);
+  // Whole words only: "american" must not match "can", "veggies" must not match "egg", "graham" must not match "ham".
+  if (has(/\b(garlic|onion|chili|chile|curry|mustard) (powder|salt)\b|pepper flakes?|\bpepper flake\b|\bcayenne\b|\bcinnamon\b|\bcumin\b|\bpaprika\b|\bnutmeg\b|\boregano\b|\bchili powder\b|\bseasoning\b|\bspices?\b|\bground (ginger|cloves?|allspice|nutmeg)\b|\bturmeric\b|\bbay leaves?\b|\ballspice\b|\bdried (thyme|rosemary|sage|parsley|basil|dill|oregano)\b|^cloves?$/)) return "S";
+  if (has(/\bcornstarch\b|\bflour\b|\bsugar\b|\bvanilla\b|baking (soda|powder)|\bsalt\b|black pepper|\b(olive|vegetable|canola) oil\b|\boil\b|\bcocoa\b|\byeast\b|\bbreadcrumbs?\b|\bpanko\b|\bshortening\b/)) return "X";
+  if (has(/\bfrozen\b|\bice cream\b/)) return "F";
+  if (has(/\b(evaporated|condensed|coconut) milk\b|\bbroth\b|\bstock\b|\bsauce\b|\bcanned?\b|\bcans?\b|\bsoup\b|pasta|noodle|\brice\b|\bbeans?\b|\bglaze\b|mustard|ketchup|mayo|vinegar|syrup|\bhoney\b|\bsalsa\b|pickles?|extract|\bjam\b|peanut butter|almond butter|pineapple chunks|dried (cranberries|fruit|cherries)|\bnuts?\b|pecans|walnuts|almonds|\bchips\b|crackers?|cereal|\boats\b|cornmeal/)) return "C";
+  if (has(/\b(chicken|beef|pork|turkey|bacon|sausage|ham|shrimp|salmon|steak|lamb|brisket|ribs)\b/)) return "M";
+  if (has(/\b(milk|butter|cheese|cream|eggs?|yogurt|parmesan|mozzarella|cheddar|ricotta|half and half)\b/)) return "D";
+  if (has(/\b(bread|rolls?|buns?|tortillas?|crust|baguette|biscuits?|pita)\b/)) return "B";
+  if (has(/\b(wine|juice|soda|beer|cider|seltzer|lemonade|punch)\b/)) return "K";
+  if (has(/\b(onions?|garlic|potato(es)?|apples?|pineapple|lemons?|limes?|oranges?|berr(y|ies)|cranberries|lettuce|tomato(es)?|carrots?|celery|parsley|cilantro|basil|thyme|sage|rosemary|spinach|mushrooms?|corn|squash|peppers?|greens|herbs?|shallots?|pears?|kale|salad|veg(gie|gies|etables?)|cucumbers?|broccoli|cauliflower|cabbage|zucchini|avocados?|grapes|ginger|chives|scallions)\b/)) return "P";
   return "C";
 }
 export function parseQty(input: string): number | null {
@@ -205,18 +207,20 @@ export function derive(s: PlannerState): Derived {
   const keys: string[] = [];
   mine.forEach((r) => {
     const sc = scale(r);
-    r.ing.forEach((x) => {
-      const vol = VOL[x[2]] !== undefined;
-      const k = x[0] + "|" + (vol ? "vol" : x[2]);
-      if (!map[k]) { map[k] = { name: x[0], u: vol ? "vol" : x[2], sec: x[3], q: 0, used: [] }; keys.push(k); }
-      map[k].q += x[1] * sc.mult * (vol ? VOL[x[2]] : 1);
-      const sn = r.short || r.name;
+    const sn = r.short || r.name;
+    r.ing.forEach((x) => groceryLines(x, !!r.custom, parseLine, guessSec).forEach((l) => {
+      const vol = VOL[l.u] !== undefined;
+      const k = l.name + "|" + (l.staple ? "staple" : vol ? "vol" : l.u);
+      if (!map[k]) { map[k] = { name: l.name, u: l.staple ? "staple" : vol ? "vol" : l.u, sec: l.sec, q: 0, used: [] }; keys.push(k); }
+      if (l.staple) map[k].q = 1; // salt and pepper: listed once, no amount (you check the pantry)
+      else map[k].q += l.q * sc.mult * (vol ? VOL[l.u] : 1);
       if (!map[k].used.includes(sn)) map[k].used.push(sn);
-    });
+    }));
   });
   const toItem = (k: string): GroceryItem => {
     const it = map[k]; const key = "g:" + mode + ":" + k;
     const base = { key, name: it.name, used: it.used, section: it.sec };
+    if (it.u === "staple") return { ...base, buy: "", need: "" };
     if (it.u === "vol") {
       const v = bestVolume(it.q), need = qtyStr(ceilTo(v.q, 0.25), v.u);
       const p = packaged(it.name, "vol", it.q, it.sec);
