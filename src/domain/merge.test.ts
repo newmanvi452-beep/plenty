@@ -107,3 +107,16 @@ describe("sign-in messages", () => {
     expect(friendly("email rate limit exceeded", false)).toMatch(/Too many emails/);
   });
 });
+
+describe("items typed onto the grocery list", () => {
+  it("belong to the event on screen and survive a reload of old data", () => {
+    let sv = initialSaved();
+    expect(view(sv).shopAdds).toEqual([]);
+    sv = applyPatch(sv, { shopAdds: [{ id: "a1", text: "Paper towels" }] });
+    expect(view(sv).shopAdds).toEqual([{ id: "a1", text: "Paper towels" }]);
+    sv = addEventTo(sv, "party", "Party", "p2");
+    expect(view(sv).shopAdds).toEqual([]);
+    const old = initialSaved(); delete (old.events[0] as { shopAdds?: unknown }).shopAdds;
+    expect(view(old).shopAdds).toEqual([]);
+  });
+});

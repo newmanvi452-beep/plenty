@@ -20,10 +20,14 @@ export interface EventRec {
   bringers: Record<string, string>;
   extras: PlannerState["extras"];
   got: Record<string, true>; done: Record<string, true>;
+  /** items the host typed onto the grocery list by hand */
+  shopAdds?: ShopAdd[];
   /** one share link per event; `token` is the owner's secret and never leaves the owner's account */
   shares: Partial<Record<Mode, { slug: string; token: string }>>;
   claimSync: Record<string, string>;
 }
+
+export interface ShopAdd { id: string; text: string }
 
 /** Everything that is saved on the device and synced to the account. */
 export interface Saved {
@@ -50,6 +54,7 @@ export interface AppState extends PlannerState {
   planView: "before" | "dayof";
   got: Record<string, true>;
   done: Record<string, true>;
+  shopAdds: ShopAdd[];
   people: string[];
   reviews: Review[];
   eventNotes: Record<string, string>;
@@ -66,14 +71,14 @@ export interface AppState extends PlannerState {
 const KEY = "plenty:v1";
 const ids = (a: string[]) => Object.fromEntries(a.map((i) => [i, true as const]));
 /** fields that belong to the event on screen (everything else is shared by all events) */
-const EVENT_FIELDS = ["adults", "kids", "leftovers", "partyStyle", "dinnerTG", "partyTime", "tgDate", "partyDate", "selTG", "selP", "bringers", "extras", "got", "done", "shares", "claimSync"] as const;
+const EVENT_FIELDS = ["adults", "kids", "leftovers", "partyStyle", "dinnerTG", "partyTime", "tgDate", "partyDate", "selTG", "selP", "bringers", "extras", "got", "done", "shopAdds", "shares", "claimSync"] as const;
 const DEFAULT_NAMES: Record<Mode, string> = { tg: "Thanksgiving", party: "Party" };
 
 export const newEvent = (mode: Mode, id: string, name?: string, now: Date = new Date()): EventRec => ({
   id, name: (name || "").trim() || DEFAULT_NAMES[mode], mode,
   adults: 12, kids: 0, leftovers: false, partyStyle: "meal", dinnerTG: 16 * 60, partyTime: 19 * 60,
   tgDate: mode === "tg" ? isoDate(nextThanksgiving(now)) : "", partyDate: "",
-  selTG: ids(DEFAULT_TG), selP: ids(DEFAULT_PARTY), bringers: {}, extras: [], got: {}, done: {}, shares: {}, claimSync: {},
+  selTG: ids(DEFAULT_TG), selP: ids(DEFAULT_PARTY), bringers: {}, extras: [], got: {}, done: {}, shopAdds: [], shares: {}, claimSync: {},
 });
 
 export const initialSaved = (): Saved => ({
@@ -126,7 +131,7 @@ export function view(sv: Saved): AppState {
   return {
     mode: ev.mode, adults: ev.adults, kids: ev.kids, leftovers: ev.leftovers, partyStyle: ev.partyStyle, dinnerTG: ev.dinnerTG, partyTime: ev.partyTime,
     tgDate: ev.tgDate, partyDate: ev.partyDate, hidden: sv.hidden, selTG: ev.selTG, selP: ev.selP, custom: sv.custom, bringers: ev.bringers, extras: ev.extras,
-    tab: sv.tab, planView: sv.planView, got: ev.got, done: ev.done, people: sv.people, reviews: sv.reviews, eventNotes: sv.eventNotes,
+    tab: sv.tab, planView: sv.planView, got: ev.got, done: ev.done, shopAdds: ev.shopAdds ?? [], people: sv.people, reviews: sv.reviews, eventNotes: sv.eventNotes,
     shares: ev.shares, claimSync: ev.claimSync, profile: sv.profile, modified: sv.modified,
     eid: ev.id, eventName: ev.name, events: sv.events.map((e) => ({ id: e.id, name: e.name, mode: e.mode })),
   };

@@ -57,8 +57,8 @@ export default function App() {
   const [showForm, setShowForm] = useState(false);
   useEffect(() => { document.documentElement.dataset.mode = s.mode; }, [s.mode]);
 
-  const gTotal = d.grocery.reduce((n, g) => n + g.items.length, 0);
-  const gGot = d.grocery.reduce((n, g) => n + g.items.filter((i) => s.got[i.key]).length, 0);
+  const gTotal = d.grocery.reduce((n, g) => n + g.items.length, 0) + s.shopAdds.length;
+  const gGot = d.grocery.reduce((n, g) => n + g.items.filter((i) => s.got[i.key]).length, 0) + s.shopAdds.filter((a) => s.got["add:" + a.id]).length;
   const planKeys = [...d.planDays.flatMap((p) => p.tasks), ...d.dayOf].map((t) => s.mode + ":" + t.id);
   const pDone = planKeys.filter((k) => s.done[k]).length;
   const titles: Record<Tab, [string, string]> = {
@@ -255,14 +255,41 @@ function Menu({ s, d, patch, share, open, openForm }: { s: AppState; d: Derived;
 
 const PREVIEW_ITEMS = 6, PREVIEW_TASKS = 4;
 function Shop({ s, d, patch, preview, lock, price }: { s: AppState; d: Derived; patch: Patch; preview: boolean; lock: () => void; price: string }) {
-  if (!d.grocery.length) return <p className="empty">Pick some dishes and your list shows up here.</p>;
+  const [text, setText] = useState("");
   const flip = (k: string) => patch((st) => ({ got: toggleIn(st.got, k) }));
+  const addKey = (id: string) => "add:" + id;
+  const addItem = () => {
+    const t = text.trim().replace(/\s+/g, " ").slice(0, 80);
+    if (!t) return;
+    if (preview) { lock(); return; }
+    patch((st) => ({ shopAdds: [...st.shopAdds, { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), text: t }] }));
+    setText("");
+  };
+  const removeAdd = (id: string) => patch((st) => ({ shopAdds: st.shopAdds.filter((a) => a.id !== id), got: Object.fromEntries(Object.entries(st.got).filter(([k]) => k !== addKey(id))) as Record<string, true> }));
+  const adds = s.shopAdds ?? [];
+  const addsTodo = adds.filter((a) => !s.got[addKey(a.id)]), addsGot = adds.filter((a) => s.got[addKey(a.id)]);
   const todo = d.grocery.map((g) => ({ ...g, items: g.items.filter((i) => !s.got[i.key]) })).filter((g) => g.items.length);
   const got = d.grocery.flatMap((g) => g.items.filter((i) => s.got[i.key]));
   // In preview, only the first few items show; the rest sit behind the unlock.
   let shown = 0, hidden = 0;
-  const visible = todo.map((g) => { const room = preview ? Math.max(0, PREVIEW_ITEMS - shown) : g.items.length; const items = g.items.slice(0, room); shown += items.length; hidden += g.items.length - items.length; return { ...g, items, total: g.items.length }; }).filter((g) => g.items.length);
+  const visible = todo.map((g) => { const room = preview ? Math.max(0, PREVIEW_ITEMS - shown) : g.items.length; const items = g.items.slice(0, room); shown += items.length; hidden += g.items.length - items.length; return { ...g, items, total: g.items.length }; });
   return (<>
+    <section className="card" aria-label="Add an item" style={{ gap: 10 }}>
+      <div className="row" style={{ gap: 8 }}>
+        <input aria-label="Add an item to the list" placeholder="Add an item, like paper towels" value={text} maxLength={80} autoComplete="off"
+          onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addItem(); }} style={{ flex: 1, minWidth: 0 }} />
+        <button className="btn" style={{ minHeight: 44, padding: "0 18px", flex: "none" }} disabled={!text.trim()} onClick={addItem}>Add</button>
+      </div>
+      {addsTodo.length > 0 && <div>
+        <h2 style={{ fontSize: 18 }}>Added by you <span className="sub">· {addsTodo.length}</span></h2>
+        {addsTodo.map((a) => (
+          <div key={a.id} className="row" style={{ gap: 4 }}>
+            <button className="item" aria-pressed={false} onClick={() => flip(addKey(a.id))}><span className="box" /><span className="txt">{a.text}</span></button>
+            <button className="round" aria-label={`Remove ${a.text}`} onClick={() => removeAdd(a.id)} style={{ flex: "none" }}>✕</button>
+          </div>))}
+      </div>}
+    </section>
+    {!d.grocery.length && !adds.length && <p className="empty">Pick some dishes and your list shows up here.</p>}
     {visible.map((g) => (
       <section className="card" key={g.section} aria-label={g.label}>
         <h2>{g.label} <span className="sub">· {g.total}</span></h2>
@@ -272,11 +299,14 @@ function Shop({ s, d, patch, preview, lock, price }: { s: AppState; d: Derived; 
             <span className="txt"><b>{i.buy}</b> {i.name}<small>{i.need ? `Recipes need ${i.need} · ` : ""}For {i.used.join(", ")}</small></span></button>))}</div>
       </section>))}
     {hidden > 0 && <LockCard title={`${hidden} more item${hidden === 1 ? "" : "s"} on your list`} text="Unlock Serves 20 to see your full shopping list, sorted by aisle." price={price} lock={lock} />}
-    {!todo.length && <p className="empty">Everything's in the cart. 🎉</p>}
-    <Completed count={got.length}>
+    {d.grocery.length > 0 && !todo.length && !addsTodo.length && <p className="empty">Everything's in the cart. 🎉</p>}
+    <Completed count={got.length + addsGot.length}>
       {got.map((i) => (
         <button key={i.key} className="item" aria-pressed={true} onClick={() => flip(i.key)}>
           <span className="box"><Check /></span><span className="txt"><b>{i.buy}</b> {i.name}</span></button>))}
+      {addsGot.map((a) => (
+        <button key={a.id} className="item" aria-pressed={true} onClick={() => flip(addKey(a.id))}>
+          <span className="box"><Check /></span><span className="txt">{a.text}</span></button>))}
       <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => patch({ got: {} })}>Uncheck everything</button>
     </Completed>
   </>);
