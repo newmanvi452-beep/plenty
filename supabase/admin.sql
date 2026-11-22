@@ -85,6 +85,8 @@ begin
     'unlocked_by_source', coalesce((select jsonb_object_agg(source, c) from (select source, count(*) c from public.entitlements group by 1) s), '{}'::jsonb),
     'shared_menus', (select count(*) from public.shared_events),
     'claims', (select count(*) from public.claims),
+    'web_sales', (select count(*) from public.entitlements where source = 'stripe'),
+    'web_sales_7d', (select count(*) from public.entitlements where source = 'stripe' and created_at > now() - interval '7 days'),
     'downloads_total', (select coalesce(sum(downloads),0) from public.app_downloads),
     'downloads_7d', (select coalesce(sum(downloads),0) from public.app_downloads where day > current_date - 7),
     'purchases_total', (select coalesce(sum(purchases),0) from public.app_downloads),

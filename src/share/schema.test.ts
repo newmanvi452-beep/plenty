@@ -163,6 +163,7 @@ describe("admin dashboard and support form", () => {
     await expect(as("anon", null, () => q("select * from app_downloads"))).rejects.toThrow(/permission denied/);
     const o = (await as("authenticated", ADMIN, () => q("select admin_overview() as o")))[0].o;
     expect(o).toMatchObject({ downloads_total: 3, purchases_total: 1 });
+    expect(typeof o.web_sales).toBe("number");
   });
   it("an admin sees the numbers and the support requests, and can mark one done", async () => {
     const o = (await as("authenticated", ADMIN.toUpperCase(), () => q("select admin_overview() as o")))[0].o;

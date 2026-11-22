@@ -58,6 +58,7 @@ function Dashboard({ session, signOut }: { session: Session; signOut: () => void
         <Stat label="Unlocked" value={ov.unlocked} note={Object.entries(ov.unlocked_by_source).map(([k, v]) => `${v} ${k}`).join(" · ") || "none yet"} />
         <Stat label="Shared menus" value={ov.shared_menus} note={`${ov.claims} dishes claimed`} />
         <Stat label="App Store downloads" value={ov.downloads_total} note={ov.downloads_synced_to ? `${ov.downloads_7d} this week · ${ov.purchases_total} bought in app` : "waiting for first sync"} />
+        <Stat label="Web sales" value={ov.web_sales} note={`about $${(ov.web_sales * 9.99).toFixed(2)} · ${ov.web_sales_7d} this week`} />
         <Stat label="Open support" value={ov.support_open} />
       </div>
       <section className="card" style={{ gap: 8 }}>
