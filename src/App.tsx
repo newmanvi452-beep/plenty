@@ -9,6 +9,8 @@ import { extractRecipeText } from "./domain/ocr";
 import { AppState, Tab, useAppState } from "./store";
 import { ShareApi, useShare } from "./share/useShare";
 import ProfileSheet from "./ProfileSheet";
+import Walkthrough, { firstRun } from "./Walkthrough";
+import UpdateBanner from "./UpdateBanner";
 import { AccountApi, useAccount } from "./sync/useAccount";
 import { PAYWALL_ON, WEB_EMAIL_GATE, useEntitlement } from "./sync/useEntitlement";
 import { UnlockSheet, LockCard } from "./Paywall";
@@ -43,7 +45,7 @@ export default function App() {
   const [s, patch, replace, saved, events] = useAppState();
   const account = useAccount(saved, replace);
   const ent = useEntitlement(account);
-  const [showProfile, setShowProfile] = useState(false), [showUnlock, setShowUnlock] = useState(false);
+  const [showTour, setShowTour] = useState(firstRun), [showProfile, setShowProfile] = useState(false), [showUnlock, setShowUnlock] = useState(false);
   const [evSheet, setEvSheet] = useState<null | "new" | "edit">(null);
   const d = derive(s);
   const realShare = useShare(s, d, patch);
@@ -84,6 +86,7 @@ export default function App() {
       </header>
       {s.tab === "home" && <p className="tagline">{titles.home[1]}</p>}
       <main>
+        <UpdateBanner />
         {preview && <button className="previewbar" onClick={lock}>👀 Preview · Unlock everything for {ent.price}</button>}
         {s.tab === "home" && <Home s={s} d={d} patch={patch} share={share} account={account} openProfile={() => setShowProfile(true)} events={events} setSheet={setEvSheet} />}
         {s.tab === "menu" && <Menu s={s} d={d} patch={patch} share={share} open={preview ? (() => lock()) : setDetail} openForm={preview ? lock : () => setShowForm(true)} />}
@@ -98,7 +101,8 @@ export default function App() {
       </nav>
       {detail && <DetailSheet id={detail} s={s} d={d} patch={patch} close={() => setDetail(null)} />}
       {preview && showUnlock && <UnlockSheet ent={ent} signedIn={!!account.session} email={account.email} signIn={() => { setShowUnlock(false); setShowProfile(true); }} close={() => setShowUnlock(false)} />}
-      {showProfile && <ProfileSheet account={account} s={s} patch={patch} close={() => setShowProfile(false)} />}
+      {showProfile && <ProfileSheet account={account} s={s} patch={patch} close={() => setShowProfile(false)} tour={() => { setShowProfile(false); setShowTour(true); }} />}
+      {showTour && <Walkthrough close={() => setShowTour(false)} />}
       {evSheet && <EventSheet kind={evSheet} s={s} patch={patch} events={events} close={() => setEvSheet(null)} />}
       {showForm && <FormSheet s={s} d={d} patch={patch} close={() => setShowForm(false)} />}
     </div>

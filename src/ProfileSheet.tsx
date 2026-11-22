@@ -7,7 +7,7 @@ type Patch = (p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => vo
 const timeOf = (iso: string) => { const d = new Date(iso); return isNaN(+d) ? "" : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
 
 /** Your profile: your name, and signing in so your plans are saved to your account on every device. */
-export default function ProfileSheet({ account, s, patch, close }: { account: AccountApi; s: AppState; patch: Patch; close: () => void }) {
+export default function ProfileSheet({ account, s, patch, close, tour }: { account: AccountApi; s: AppState; patch: Patch; close: () => void; tour?: () => void }) {
   const [email, setEmail] = useState(""), [code, setCode] = useState(""), [step, setStep] = useState<"email" | "code">("email");
   const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [cool, setCool] = useState(0);
   useEffect(() => { if (cool <= 0) return; const t = setTimeout(() => setCool(cool - 1), 1000); return () => clearTimeout(t); }, [cool]);
@@ -26,6 +26,8 @@ export default function ProfileSheet({ account, s, patch, close }: { account: Ac
         <input id="profile-name" value={s.profile.name} maxLength={40} placeholder="Vi" autoComplete="off"
           onChange={(e) => patch({ profile: { name: e.target.value } })} />
         <p className="sub" style={{ margin: 0, fontWeight: 600 }}>Shown as the host on shared menus, and on your own dishes under “Who’s bringing what”.</p></div>
+
+      {tour && <button className="btn ghost" onClick={tour}>Replay the welcome tour</button>}
 
       {account.enabled && !signedIn && (<>
         <section className="card" aria-label="Sign in" style={{ gap: 10 }}>
