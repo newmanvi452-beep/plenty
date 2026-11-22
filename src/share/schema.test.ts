@@ -16,8 +16,9 @@ beforeAll(async () => {
   await db.exec("create role anon nologin; create role authenticated nologin; create role service_role nologin; grant usage on schema public to anon, authenticated, service_role;");
   // Minimal stand-in for Supabase's auth schema: auth.uid() reads the signed-in user from a setting, like PostgREST does.
   await db.exec(`create schema auth;
-    create table auth.users (id uuid primary key);
+    create table auth.users (id uuid primary key, email text, created_at timestamptz default now(), last_sign_in_at timestamptz);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+    create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
     grant usage on schema auth to anon, authenticated;`);
   await db.exec(readFileSync(new URL("../../supabase/schema.sql", import.meta.url), "utf8"));
 });
@@ -124,5 +125,44 @@ describe("accounts: one private row per user", () => {
   it("a user can delete their own data", async () => {
     await asUser(A, () => q("delete from user_data"));
     expect(await asUser(A, () => q("select * from user_data"))).toEqual([]);
+  });
+});
+
+describe("admin dashboard and support form", () => {
+  const as = async <T,>(role: "anon" | "authenticated", email: string | null, fn: () => Promise<T>) => {
+    await db.exec(`set role ${role}`);
+    await db.exec(`select set_config('request.jwt.claims', '${email ? JSON.stringify({ email }) : ""}', false)`);
+    try { return await fn(); } finally { await db.exec("reset role"); await db.exec("select set_config('request.jwt.claims', '', false)"); }
+  };
+  const ADMIN = "vi@alevigroup.com";
+  it("anyone can send a support request, but cannot read any", async () => {
+    await as("anon", null, () => q("select submit_support('guest@example.com','Gus','The code never arrived')"));
+    await expect(as("anon", null, () => q("select * from support_requests"))).rejects.toThrow(/permission denied/);
+    await expect(as("anon", null, () => q("select admin_support()"))).rejects.toThrow(/permission denied/);
+  });
+  it("rejects a bad email and an empty message", async () => {
+    await expect(as("anon", null, () => q("select submit_support('nope','x','hello there')"))).rejects.toThrow(/bad email/);
+    await expect(as("anon", null, () => q("select submit_support('a@b.co','x','  ')"))).rejects.toThrow(/too short/);
+  });
+  it("limits how many requests one address can send per hour", async () => {
+    for (let i = 0; i < 4; i++) await as("anon", null, () => q("select submit_support('spam@example.com',null,'message number "+i+"')"));
+    await as("anon", null, () => q("select submit_support('spam@example.com',null,'message number 5')"));
+    await expect(as("anon", null, () => q("select submit_support('spam@example.com',null,'message number 6')"))).rejects.toThrow(/too many/);
+  });
+  it("a signed-in person who is not an admin is refused", async () => {
+    await expect(as("authenticated", "someone@example.com", () => q("select admin_overview()"))).rejects.toThrow(/not allowed/);
+    await expect(as("authenticated", "someone@example.com", () => q("select admin_support()"))).rejects.toThrow(/not allowed/);
+    await expect(as("authenticated", "someone@example.com", () => q("select admin_support_set(gen_random_uuid(),'done')"))).rejects.toThrow(/not allowed/);
+    expect((await as("authenticated", "someone@example.com", () => q("select is_admin() as a")))[0].a).toBe(false);
+  });
+  it("an admin sees the numbers and the support requests, and can mark one done", async () => {
+    const o = (await as("authenticated", ADMIN.toUpperCase(), () => q("select admin_overview() as o")))[0].o;
+    expect(o).toMatchObject({ support_open: 6 });
+    expect(Array.isArray(o.signups_by_day) && o.signups_by_day.length).toBe(30);
+    const list = (await as("authenticated", ADMIN, () => q("select admin_support() as s")))[0].s as { id: string; email: string }[];
+    expect(list.some((r) => r.email === "guest@example.com")).toBe(true);
+    await as("authenticated", ADMIN, () => q("select admin_support_set($1,'done')", [list[0].id]));
+    expect((await as("authenticated", ADMIN, () => q("select admin_overview() as o")))[0].o.support_open).toBe(5);
+    expect(Array.isArray((await as("authenticated", ADMIN, () => q("select admin_people() as p")))[0].p)).toBe(true);
   });
 });
