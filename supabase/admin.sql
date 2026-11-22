@@ -39,6 +39,40 @@ end $$;
 revoke all on function public.submit_support(text, text, text) from public;
 grant execute on function public.submit_support(text, text, text) to anon, authenticated;
 
+
+-- App Store downloads: filled daily by a script on the owner's Mac (tools/sync-app-store.mjs).
+create table if not exists public.app_downloads (
+  day date primary key,
+  downloads int not null default 0,
+  redownloads int not null default 0,
+  updates int not null default 0,
+  purchases int not null default 0
+);
+alter table public.app_downloads enable row level security;
+revoke all on public.app_downloads from public, anon, authenticated;
+
+create table if not exists public.ingest_keys (hash bytea primary key, note text);
+alter table public.ingest_keys enable row level security;
+revoke all on public.ingest_keys from public, anon, authenticated;
+
+create or replace function public.ingest_downloads(p_token text, p_rows jsonb) returns int
+language plpgsql security definer set search_path = public as $$
+declare n int := 0; r jsonb;
+begin
+  if p_token is null or not exists (select 1 from public.ingest_keys where hash = sha256(convert_to(p_token, 'utf8'))) then
+    raise exception 'not allowed';
+  end if;
+  for r in select * from jsonb_array_elements(p_rows) loop
+    insert into public.app_downloads(day, downloads, redownloads, updates, purchases)
+    values ((r->>'day')::date, coalesce((r->>'downloads')::int,0), coalesce((r->>'redownloads')::int,0), coalesce((r->>'updates')::int,0), coalesce((r->>'purchases')::int,0))
+    on conflict (day) do update set downloads = excluded.downloads, redownloads = excluded.redownloads, updates = excluded.updates, purchases = excluded.purchases;
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+revoke all on function public.ingest_downloads(text, jsonb) from public;
+grant execute on function public.ingest_downloads(text, jsonb) to anon, authenticated;
+
 create or replace function public.admin_overview() returns jsonb
 language plpgsql stable security definer set search_path = public, auth as $$
 begin
@@ -51,6 +85,13 @@ begin
     'unlocked_by_source', coalesce((select jsonb_object_agg(source, c) from (select source, count(*) c from public.entitlements group by 1) s), '{}'::jsonb),
     'shared_menus', (select count(*) from public.shared_events),
     'claims', (select count(*) from public.claims),
+    'downloads_total', (select coalesce(sum(downloads),0) from public.app_downloads),
+    'downloads_7d', (select coalesce(sum(downloads),0) from public.app_downloads where day > current_date - 7),
+    'purchases_total', (select coalesce(sum(purchases),0) from public.app_downloads),
+    'downloads_synced_to', (select max(day) from public.app_downloads),
+    'downloads_by_day', coalesce((
+      select jsonb_agg(jsonb_build_object('day', g::date, 'n', coalesce((select downloads from public.app_downloads a where a.day = g::date),0)) order by g)
+      from generate_series(current_date - 29, current_date, interval '1 day') g), '[]'::jsonb),
     'support_open', (select count(*) from public.support_requests where status = 'open'),
     'signups_by_day', coalesce((
       select jsonb_agg(jsonb_build_object('day', d, 'n', n) order by d)

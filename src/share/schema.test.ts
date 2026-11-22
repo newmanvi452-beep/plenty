@@ -155,6 +155,15 @@ describe("admin dashboard and support form", () => {
     await expect(as("authenticated", "someone@example.com", () => q("select admin_support_set(gen_random_uuid(),'done')"))).rejects.toThrow(/not allowed/);
     expect((await as("authenticated", "someone@example.com", () => q("select is_admin() as a")))[0].a).toBe(false);
   });
+  it("download counts load only with the secret key, and the admin sees them", async () => {
+    await db.exec("insert into ingest_keys(hash) values (sha256(convert_to('test-secret','utf8')))");
+    const row = JSON.stringify([{ day: new Date().toISOString().slice(0, 10), downloads: 3, purchases: 1 }]);
+    await expect(as("anon", null, () => q("select ingest_downloads('wrong', $1::jsonb)", [row]))).rejects.toThrow(/not allowed/);
+    await as("anon", null, () => q("select ingest_downloads('test-secret', $1::jsonb)", [row]));
+    await expect(as("anon", null, () => q("select * from app_downloads"))).rejects.toThrow(/permission denied/);
+    const o = (await as("authenticated", ADMIN, () => q("select admin_overview() as o")))[0].o;
+    expect(o).toMatchObject({ downloads_total: 3, purchases_total: 1 });
+  });
   it("an admin sees the numbers and the support requests, and can mark one done", async () => {
     const o = (await as("authenticated", ADMIN.toUpperCase(), () => q("select admin_overview() as o")))[0].o;
     expect(o).toMatchObject({ support_open: 6 });

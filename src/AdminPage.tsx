@@ -44,6 +44,7 @@ function Dashboard({ session, signOut }: { session: Session; signOut: () => void
 
   if (notAdmin) return (<section className="card" style={{ gap: 10 }}><h2 style={{ fontSize: 18 }}>Not an admin</h2><p className="sub">{session.user.email} isn’t on the admin list.</p><button className="btn ghost" onClick={signOut}>Sign out</button></section>);
   const max = Math.max(1, ...(ov?.signups_by_day.map((d) => d.n) ?? [1]));
+  const dmax = Math.max(1, ...(ov?.downloads_by_day?.map((d) => d.n) ?? [1]));
   const shown = support.filter((r) => showDone || r.status === "open");
   return (<>
     <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
@@ -56,6 +57,7 @@ function Dashboard({ session, signOut }: { session: Session; signOut: () => void
         <Stat label="Accounts" value={ov.users} note={`${ov.new_24h} today · ${ov.new_7d} this week`} />
         <Stat label="Unlocked" value={ov.unlocked} note={Object.entries(ov.unlocked_by_source).map(([k, v]) => `${v} ${k}`).join(" · ") || "none yet"} />
         <Stat label="Shared menus" value={ov.shared_menus} note={`${ov.claims} dishes claimed`} />
+        <Stat label="App Store downloads" value={ov.downloads_total} note={ov.downloads_synced_to ? `${ov.downloads_7d} this week · ${ov.purchases_total} bought in app` : "waiting for first sync"} />
         <Stat label="Open support" value={ov.support_open} />
       </div>
       <section className="card" style={{ gap: 8 }}>
@@ -63,7 +65,13 @@ function Dashboard({ session, signOut }: { session: Session; signOut: () => void
         <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 90 }} role="img" aria-label="New accounts per day">
           {ov.signups_by_day.map((d) => <div key={d.day} title={`${d.day}: ${d.n}`} style={{ flex: 1, minHeight: 2, height: `${(d.n / max) * 100}%`, background: d.n ? "var(--deep)" : "var(--line)", borderRadius: 2 }} />)}
         </div>
-        <p className="sub">App Store downloads and sales will appear here once the Apple report is connected. Check them in App Store Connect for now.</p>
+      </section>
+      <section className="card" style={{ gap: 8 }}>
+        <h2 style={{ fontSize: 18 }}>App Store downloads, last 30 days</h2>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 90 }} role="img" aria-label="App Store downloads per day">
+          {ov.downloads_by_day.map((d) => <div key={d.day} title={`${d.day}: ${d.n}`} style={{ flex: 1, minHeight: 2, height: `${(d.n / dmax) * 100}%`, background: d.n ? "var(--deep)" : "var(--line)", borderRadius: 2 }} />)}
+        </div>
+        <p className="sub">{ov.downloads_synced_to ? `Updated through ${ov.downloads_synced_to}. Apple reports each day about a day late.` : "Fills in after the first daily sync from your Mac."}</p>
       </section>
     </>)}
     {tab === "support" && (<section className="card" style={{ gap: 10 }}>

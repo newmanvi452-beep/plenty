@@ -26,6 +26,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown>, s?: Session): P
 export interface Overview {
   users: number; new_24h: number; new_7d: number; unlocked: number; unlocked_by_source: Record<string, number>;
   shared_menus: number; claims: number; support_open: number; signups_by_day: { day: string; n: number }[];
+  downloads_total: number; downloads_7d: number; purchases_total: number; downloads_synced_to: string | null; downloads_by_day: { day: string; n: number }[];
 }
 export interface Person { email: string; created_at: string; last_sign_in_at: string | null; unlocked: string | null }
 export interface SupportItem { id: string; created_at: string; email: string; name: string | null; message: string; status: "open" | "done" }
