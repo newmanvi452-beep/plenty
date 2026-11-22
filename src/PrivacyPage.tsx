@@ -15,6 +15,7 @@ export default function PrivacyPage() {
             <li><b>On your device.</b> Your events, menus, recipes, checklists and notes are saved in your browser or home-screen app. You never have to sign in to use them.</li>
             <li><b>If you sign in.</b> Your email address, and a copy of the same plans so they follow you between devices. There is no password: we email you a code.</li>
             <li><b>If you share a menu.</b> The menu, its amounts and the date, plus the names guests type when they sign up to bring a dish. Anyone with the link can see these.</li>
+            <li><b>If you write to support.</b> The name, email and message you send through the Support page, or in an email to us, so we can reply. We keep them only as long as we need to help you.</li>
             <li><b>Guests.</b> A guest does not need an account. The name they enter and what they claim are stored with that shared menu, and a random key stays in their browser so they can undo their own sign-up.</li>
           </ul>
           <h2 style={{ fontSize: 18 }}>What we don’t do</h2>

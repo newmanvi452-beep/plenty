@@ -3,6 +3,7 @@ import App from "./App";
 import PrivacyPage from "./PrivacyPage";
 import TermsPage from "./TermsPage";
 import SupportPage from "./SupportPage";
+import AdminPage from "./AdminPage";
 import Landing from "./Landing";
 import GuestPage from "./share/GuestPage";
 import { slugFromHash } from "./share/client";
@@ -19,8 +20,8 @@ const installed = matchMedia("(display-mode: standalone)").matches || (navigator
 const returning = (() => { try { return !!localStorage.getItem("plenty:v1") || !!loadSession(); } catch { return false; } })();
 const front = !isNative && (location.hash === "" || location.hash === "#" || location.hash === "#/") && !installed && !returning && !location.search.includes("paid");
 createRoot(document.getElementById("root")!).render(
-  location.hash === "#/privacy" ? <PrivacyPage /> : location.hash === "#/terms" ? <TermsPage /> : location.hash === "#/support" ? <SupportPage /> : slug ? <GuestPage slug={slug} /> : front ? <Landing /> : <App />);
-document.title = location.hash === "#/privacy" ? "Privacy · Serves 20" : location.hash === "#/terms" ? "Terms & refunds · Serves 20" : location.hash === "#/support" ? "Support · Serves 20" : slug ? "You’re invited · Serves 20" : document.title;
+  location.hash === "#/privacy" ? <PrivacyPage /> : location.hash === "#/terms" ? <TermsPage /> : location.hash === "#/support" ? <SupportPage /> : location.hash === "#/admin" ? <AdminPage /> : slug ? <GuestPage slug={slug} /> : front ? <Landing /> : <App />);
+document.title = location.hash === "#/privacy" ? "Privacy · Serves 20" : location.hash === "#/terms" ? "Terms & refunds · Serves 20" : location.hash === "#/support" ? "Support · Serves 20" : location.hash === "#/admin" ? "Admin · Serves 20" : slug ? "You’re invited · Serves 20" : document.title;
 window.addEventListener("hashchange", () => location.reload());
 
 // Offline support: only in production builds so dev hot-reload isn't cached.

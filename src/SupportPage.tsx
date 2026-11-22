@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Logo } from "./Logo";
+import { submitSupport } from "./sync/admin";
 import { SUPPORT_EMAIL } from "./PrivacyPage";
 
 const FAQ: [string, React.ReactNode][] = [
@@ -12,6 +14,20 @@ const FAQ: [string, React.ReactNode][] = [
   ["Are the amounts and cooking times safe to rely on?", <>They’re good starting points for planning, not a substitute for your own judgment. Check cooking times, food safety and any allergies yourself.</>],
 ];
 
+function ContactForm() {
+  const [name, setName] = useState(""), [email, setEmail] = useState(""), [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false), [sent, setSent] = useState(false), [err, setErr] = useState("");
+  const send = async () => { setBusy(true); setErr(""); try { await submitSupport(email.trim(), name.trim(), msg.trim()); setSent(true); } catch (e) { setErr(e instanceof Error ? e.message : "Couldn’t send that."); } setBusy(false); };
+  if (sent) return <p className="sub" role="status"><b>Thank you.</b> We got your message and will reply to {email.trim()} within a day or two.</p>;
+  return (<>
+    <div className="field"><label htmlFor="sup-name">Your name (optional)</label><input id="sup-name" autoComplete="name" maxLength={100} value={name} onChange={(e) => setName(e.target.value)} /></div>
+    <div className="field"><label htmlFor="sup-email">Your email</label><input id="sup-email" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" maxLength={200} value={email} onChange={(e) => { setEmail(e.target.value); setErr(""); }} /></div>
+    <div className="field"><label htmlFor="sup-msg">How can we help?</label><textarea id="sup-msg" rows={5} maxLength={4000} value={msg} onChange={(e) => { setMsg(e.target.value); setErr(""); }} style={{ width: "100%", borderRadius: 12, border: "1.5px solid #E3CDB1", padding: 12, font: "inherit" }} /></div>
+    <button className="btn" disabled={busy || !/.+@.+\..+/.test(email.trim()) || msg.trim().length < 5} onClick={send}>{busy ? "Sending…" : "Send message"}</button>
+    {err && <p className="err" role="alert">{err}</p>}
+  </>);
+}
+
 /** Help and contact: plain language, reachable without signing in (address ends in #/support). */
 export default function SupportPage() {
   return (
@@ -21,6 +37,11 @@ export default function SupportPage() {
         <section className="card" style={{ gap: 12 }}>
           <h2 style={{ fontSize: 18 }}>Contact us</h2>
           <p className="sub">Write to <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>. Tell us what you were doing and what you saw, and which device you use. We read every message and usually reply within a day or two.</p>
+        </section>
+        <section className="card" style={{ gap: 12 }}>
+          <h2 style={{ fontSize: 18 }}>Or send a message here</h2>
+          <p className="sub">It goes straight to us. We use your email only to reply.</p>
+          <ContactForm />
         </section>
         <section className="card" style={{ gap: 12 }}>
           <h2 style={{ fontSize: 18 }}>Common questions</h2>
