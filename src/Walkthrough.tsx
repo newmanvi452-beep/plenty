@@ -9,24 +9,30 @@ export const firstRun = (() => {
 })();
 const markSeen = () => { try { localStorage.setItem(KEY, "1"); } catch { /* ignore */ } };
 
-interface Step { tab?: Tab; target?: string; icon: string; title: string; text: string }
+interface Step { tab?: Tab; target?: string; title: string; text: string }
 const TAB_NTH: Record<Tab, number> = { home: 1, menu: 2, shop: 3, plan: 4, notes: 5 };
 
 const STEPS: Step[] = [
-  { icon: "🦃", title: "Welcome to Serves 20", text: "Let’s take a quick tour of the app, one tab at a time. It takes about a minute." },
-  { tab: "home", target: "main section.hero", icon: "🏠", title: "Home: start here",
+  { title: "Welcome to Serves 20", text: "Let’s take a quick tour of the app, one tab at a time. It takes about a minute." },
+  { tab: "home", target: "main section.hero", title: "Home: start here",
     text: "Pick the date and tell us how many are coming, adults and kids. Everything else is sized for your crowd, and you can keep more than one event." },
-  { tab: "menu", target: "main section:not(.card):not(.hero)", icon: "🍽️", title: "Menu: choose your dishes",
-    text: "Pick from the classics or add your own. Paste a recipe or snap a photo and we’ll read it for you. Share the menu so guests can claim what they’ll bring." },
-  { tab: "shop", target: 'main section.card:not([aria-label="Add an item"])', icon: "🛒", title: "Groceries: shop once",
+  { tab: "home", target: 'main section[aria-label="Suggested dishes"]', title: "Home: what to make",
+    text: "We suggest how many appetizers, mains, sides and desserts to make for your crowd, and tell you if your menu is on track." },
+  { tab: "home", target: 'main section[aria-label="Share with guests"]', title: "Home: share the menu",
+    text: "Create a link and send it by text or email. Guests open it, see the menu, and sign up for a dish to bring." },
+  { tab: "menu", target: "main section:not(.card):not(.hero)", title: "Menu: choose your dishes",
+    text: "Pick from the classics or add your own. Paste a recipe or snap a photo and we’ll read it for you." },
+  { tab: "menu", target: 'main section[aria-label="Overview"]', title: "Menu: who’s bringing what",
+    text: "As guests sign up, their names show up next to each dish. You can see what’s covered and what still needs a cook." },
+  { tab: "shop", target: 'main section.card:not([aria-label="Add an item"])', title: "Groceries: shop once",
     text: "We add up every ingredient and tell you how many packages to buy, sorted by aisle. Tick items off as they go in the cart." },
-  { tab: "plan", target: "main section.card", icon: "👩‍🍳", title: "Plan: cook calmly",
+  { tab: "plan", target: "main section.card", title: "Plan: cook calmly",
     text: "A day-by-day countdown to dinner, from thawing the turkey to what to do on the day. Check things off as you go." },
-  { tab: "notes", target: "main section.card", icon: "📝", title: "Notes: remember for next year",
+  { tab: "notes", target: "main section.card", title: "Notes: remember for next year",
     text: "After the meal, mark each dish a hit or a miss and jot what to change. Next year starts with what you learned." },
-  { target: ".avatar-btn", icon: "👤", title: "Your profile",
+  { target: ".avatar-btn", title: "Your profile",
     text: "Tap here to sign in, keep your plans in sync between phone and web, and replay this tour any time." },
-  { icon: "✅", title: "You’re ready", text: "That’s the whole app. Start with the date and your guest count on Home." },
+  { title: "You’re ready", text: "That’s the whole app. Start with the date and your guest count on Home." },
 ];
 
 interface Box { x: number; y: number; w: number; h: number }
@@ -36,6 +42,7 @@ export default function Walkthrough({ go, close }: { go: (t: Tab) => void; close
   const [i, setI] = useState(0);
   const [box, setBox] = useState<Box | null>(null);
   const [lift, setLift] = useState(14);
+  const [atTop, setAtTop] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const last = i === STEPS.length - 1, st = STEPS[i];
   const done = () => { markSeen(); go("home"); close(); };
@@ -53,7 +60,9 @@ export default function Walkthrough({ go, close }: { go: (t: Tab) => void; close
       if (!el) { setBox(null); return; }
       el.scrollIntoView({ block: "start" });
       const b = el.getBoundingClientRect(), pad = 6;
-      setBox({ x: b.left - r.left - pad, y: b.top - r.top - pad, w: b.width + pad * 2, h: Math.min(b.height, r.height * 0.36) + pad * 2 });
+      const h = Math.min(b.height, r.height * 0.36) + pad * 2, y = b.top - r.top - pad;
+      setAtTop(y + h / 2 > r.height * 0.5);
+      setBox({ x: b.left - r.left - pad, y, w: b.width + pad * 2, h });
     };
     const t = setTimeout(measure, 120);
     window.addEventListener("resize", measure);
@@ -72,12 +81,11 @@ export default function Walkthrough({ go, close }: { go: (t: Tab) => void; close
   return (
     <div ref={root} className="tourbox" role="dialog" aria-label="Welcome tour" onClick={(e) => e.stopPropagation()}>
       {box && !centered ? <div className="tour-spot" style={{ left: box.x, top: box.y, width: box.w, height: box.h }} /> : <div className="tour-dim" />}
-      <div className={"tour-card" + (centered ? " mid" : "")} style={centered ? undefined : { bottom: lift }}>
+      <div className={"tour-card" + (centered ? " mid" : "")} style={centered ? undefined : atTop ? { top: "calc(env(safe-area-inset-top) + 8px)", bottom: "auto" } : { bottom: lift }}>
         <div className="tour-top">
           <div className="dots" aria-hidden="true">{STEPS.map((_, n) => <span key={n} className={n === i ? "on" : ""} />)}</div>
           {!last && <button className="btn ghost" style={{ minHeight: 34, padding: "0 14px", fontSize: 14 }} onClick={done}>Skip</button>}
         </div>
-        <div className="tour-ico" aria-hidden="true">{st.icon}</div>
         <h2 style={{ fontSize: 22, margin: 0 }}>{st.title}</h2>
         <p className="sub" style={{ fontSize: 15.5, margin: 0 }}>{st.text}</p>
         <div className="row" style={{ gap: 10 }}>
