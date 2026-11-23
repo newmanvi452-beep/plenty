@@ -31,6 +31,8 @@ const RULES: Rule[] = [
   { re: /^evaporated milk/i, base: "oz", per: 12, label: "12-oz can" },
   { re: /^sweetened condensed milk/i, base: "oz", per: 14, label: "14-oz can" },
   { re: /^fresh (thyme|rosemary|sage|oregano|dill|mint|basil|tarragon)/i, base: "vol", per: 12, label: "package" },
+  { re: /(parsley|cilantro)/i, base: "vol", per: C, label: "bunch", plural: "bunches" },
+  { re: /(green onions?|scallions?)/i, base: "vol", per: 0.75 * C, label: "bunch", plural: "bunches" },
   { re: /^ricotta/i, base: "oz", per: 15, label: "15-oz tub" },
   { re: /^goat cheese/i, base: "oz", per: 4, label: "4-oz log" },
   { re: /^semi-sweet chocolate/i, base: "oz", per: 4, label: "4-oz bar" },

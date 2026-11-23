@@ -21,3 +21,11 @@ describe("custom recipe times are optional", () => {
     expect(d.meta).toBe("10 min prep · 30 min cook");
   });
 });
+
+import { packaged } from "./packaging";
+describe("fresh herbs come by the bunch", () => {
+  it("parsley and green onions read as bunches", () => {
+    expect(packaged("Fresh Parsley", "vol", 6)?.text).toBe("1 × bunch");
+    expect(packaged("Green Onions", "vol", 60)?.text).toBe("2 × bunches");
+  });
+});
