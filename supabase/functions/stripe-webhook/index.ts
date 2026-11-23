@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
   const h = { apikey: service, Authorization: `Bearer ${service}`, "Content-Type": "application/json" };
   if (event.type === "checkout.session.completed" && event.data.object.payment_status === "paid" && event.data.object.client_reference_id) {
     const o = event.data.object;
-    const r = await fetch(`${url}/rest/v1/entitlements?on_conflict=user_id`, { method: "POST", headers: { ...h, Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ user_id: o.client_reference_id, source: "stripe", ref: o.payment_intent }) });
+    const r = await fetch(`${url}/rest/v1/entitlements?on_conflict=user_id`, { method: "POST", headers: { ...h, Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ user_id: o.client_reference_id, source: event.livemode === false ? "stripe-test" : "stripe", ref: o.payment_intent }) });
     if (!r.ok) return new Response("db error", { status: 500 }); // Stripe retries
   } else if (event.type === "charge.refunded" && event.data.object.refunded && event.data.object.payment_intent) {
     await fetch(`${url}/rest/v1/entitlements?ref=eq.${encodeURIComponent(event.data.object.payment_intent)}`, { method: "DELETE", headers: h });
