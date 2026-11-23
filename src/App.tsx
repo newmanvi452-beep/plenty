@@ -102,7 +102,7 @@ export default function App() {
       {detail && <DetailSheet id={detail} s={s} d={d} patch={patch} close={() => setDetail(null)} />}
       {preview && showUnlock && <UnlockSheet ent={ent} signedIn={!!account.session} email={account.email} signIn={() => { setShowUnlock(false); setShowProfile(true); }} close={() => setShowUnlock(false)} />}
       {showProfile && <ProfileSheet account={account} s={s} patch={patch} close={() => setShowProfile(false)} tour={() => { setShowProfile(false); setShowTour(true); }} />}
-      {showTour && <Walkthrough close={() => setShowTour(false)} />}
+      {showTour && <Walkthrough go={go} close={() => setShowTour(false)} />}
       {evSheet && <EventSheet kind={evSheet} s={s} patch={patch} events={events} close={() => setEvSheet(null)} />}
       {showForm && <FormSheet s={s} d={d} patch={patch} close={() => setShowForm(false)} />}
     </div>
