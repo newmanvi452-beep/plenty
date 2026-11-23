@@ -43,7 +43,7 @@ export default function Walkthrough({ go, close }: { go: (t: Tab) => void; close
   const [box, setBox] = useState<Box | null>(null);
   const [lift, setLift] = useState(14);
   const [atTop, setAtTop] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLDivElement>(null), cardRef = useRef<HTMLDivElement>(null);
   const last = i === STEPS.length - 1, st = STEPS[i];
   const done = () => { markSeen(); go("home"); close(); };
 
@@ -60,8 +60,15 @@ export default function Walkthrough({ go, close }: { go: (t: Tab) => void; close
       if (!el) { setBox(null); return; }
       el.scrollIntoView({ block: "start" });
       const b = el.getBoundingClientRect(), pad = 6;
-      const h = Math.min(b.height, r.height * 0.36) + pad * 2, y = b.top - r.top - pad;
-      setAtTop(y + h / 2 > r.height * 0.5);
+      // Light the whole target; if it is taller than the space the note leaves, let it run under the note instead of cutting it off.
+      const ch = cardRef.current?.getBoundingClientRect().height ?? 0, liftNow = nav && nav.width > r.width * 0.5 ? r.bottom - nav.top + 12 : 14;
+      const rawY = b.top - r.top - pad, rawH = b.height + pad * 2;
+      const low = rawY + Math.min(rawH, r.height * 0.36) / 2 > r.height * 0.5;
+      setAtTop(low);
+      let y = rawY, h = rawH;
+      if (low) { const under = 60 + ch - 24; if (y < under) { h -= under - y; y = under; } }
+      else { const under = r.height - liftNow - ch + 24; if (y + h > under) h = under - y; }
+      h = Math.max(h, 40);
       setBox({ x: b.left - r.left - pad, y, w: b.width + pad * 2, h });
     };
     const t = setTimeout(measure, 120);
@@ -81,7 +88,7 @@ export default function Walkthrough({ go, close }: { go: (t: Tab) => void; close
   return (
     <div ref={root} className="tourbox" role="dialog" aria-label="Welcome tour" onClick={(e) => e.stopPropagation()}>
       {box && !centered ? <div className="tour-spot" style={{ left: box.x, top: box.y, width: box.w, height: box.h }} /> : <div className="tour-dim" />}
-      <div className={"tour-card" + (centered ? " mid" : "")} style={centered ? undefined : atTop ? { top: "calc(env(safe-area-inset-top) + 8px)", bottom: "auto" } : { bottom: lift }}>
+      <div ref={cardRef} className={"tour-card" + (centered ? " mid" : "")} style={centered ? undefined : atTop ? { top: "calc(env(safe-area-inset-top) + 8px)", bottom: "auto" } : { bottom: lift }}>
         <div className="tour-top">
           <div className="dots" aria-hidden="true">{STEPS.map((_, n) => <span key={n} className={n === i ? "on" : ""} />)}</div>
           {!last && <button className="btn ghost" style={{ minHeight: 34, padding: "0 14px", fontSize: 14 }} onClick={done}>Skip</button>}
