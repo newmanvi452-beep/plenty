@@ -1,6 +1,7 @@
 import Foundation
 import Capacitor
 import StoreKit
+import UIKit
 
 /// Apple in-app purchase (StoreKit 2) for the one-time "Unlock Serves 20" purchase.
 /// StoreKit checks Apple's signature on every transaction, so a purchase can't be faked on the phone.
@@ -28,6 +29,12 @@ public class StorePlugin: CAPPlugin, CAPBridgedPlugin {
         return false
     }
 
+    /// The window the App Store's purchase sheet should appear over (newer iOS versions want this spelled out).
+    @MainActor private func activeScene() -> UIWindowScene? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+    }
+
     @objc func product(_ call: CAPPluginCall) {
         Task {
             do {
@@ -41,7 +48,13 @@ public class StorePlugin: CAPPlugin, CAPBridgedPlugin {
         Task {
             do {
                 guard let p = try await self.loadProduct() else { call.reject("The product isn't available yet."); return }
-                switch try await p.purchase() {
+                let outcome: Product.PurchaseResult
+                if #available(iOS 17.0, *), let scene = await self.activeScene() {
+                    outcome = try await p.purchase(confirmIn: scene)
+                } else {
+                    outcome = try await p.purchase()
+                }
+                switch outcome {
                 case .success(let verification):
                     switch verification {
                     case .verified(let t):
