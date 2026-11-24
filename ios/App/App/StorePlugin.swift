@@ -33,7 +33,7 @@ public class StorePlugin: CAPPlugin, CAPBridgedPlugin {
             do {
                 guard let p = try await self.loadProduct() else { call.reject("The product isn't available yet."); return }
                 call.resolve(["id": p.id, "displayPrice": p.displayPrice])
-            } catch { call.reject("Couldn't reach the App Store.") }
+            } catch { call.reject("Couldn't reach the App Store: \(error.localizedDescription)") }
         }
     }
 
@@ -57,7 +57,7 @@ public class StorePlugin: CAPPlugin, CAPBridgedPlugin {
                 @unknown default:
                     call.reject("The purchase didn't complete.")
                 }
-            } catch { call.reject("The purchase didn't go through.") }
+            } catch { call.reject("The App Store said: \(error.localizedDescription)") }
         }
     }
 

@@ -63,7 +63,8 @@ export function useEntitlement(account: AccountApi) {
       const url = await startCheckout(await freshSession(session));
       if (url === "already") { await checkAccount(); setBusy(false); return; }
       location.href = url;
-    } catch (e) { setError(e instanceof AuthError || e instanceof CloudError ? e.message : "The purchase didn’t go through. Please try again."); setBusy(false); }
+    } catch (e) { const why = isNative && e && typeof (e as { message?: unknown }).message === "string" ? (e as { message: string }).message : "";
+      setError(e instanceof AuthError || e instanceof CloudError ? e.message : why ? `The purchase didn’t go through. ${why}` : "The purchase didn’t go through. Please try again."); setBusy(false); }
   };
   /** Apple requires a way to get back a purchase made earlier (new phone, reinstall). */
   const restore = async () => {
